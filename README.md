@@ -163,6 +163,158 @@ Go to **DataGrip** and choose the connection then input the information as provi
 
 ---
 
+## Security Flow — How It Works Step by Step
+
+### STEP 1 — Register `POST /authorization/register`
+
+```
+Client sends: { email, password, roleId }
+        │
+        ▼
+JwtAuthenticationController.insertUser()
+        │
+        ▼
+JwtUserDetailsServiceImpl.insertUser()
+        ├── Validate roleId is 1 (DISTRIBUTOR) or 2 (RETAILER)
+        ├── Validate email format (regex)
+        ├── Check duplicate email in tb_distributor_account OR tb_retailer_account
+        ├── BCrypt encode the password
+        └── INSERT INTO tb_distributor_account / tb_retailer_account
+            is_verified = FALSE by default  ← account locked until OTP verified
+
+Returns: AppUserDto (id, email, roleId)
+```
+
+---
+
+### STEP 2 — Verify Email with OTP
+
+#### Generate OTP `POST /authorization/api/v1/otp/generate`
+```
+Client sends: email
+        │
+        ▼
+OtpServiceImplV1.generateOtp()
+        ├── Find user in tb_distributor_account OR tb_retailer_account
+        ├── Generate random 4-digit number (1000–9999)
+        ├── EmailService.sendSimpleMail()  → sends OTP code to user's email
+        └── INSERT INTO tb_distributor_otp / tb_retailer_otp  (with timestamp)
+```
+
+#### Verify OTP `POST /authorization/api/v1/otp/verify`
+```
+Client sends: otp (4-digit), email
+        │
+        ▼
+OtpServiceImplV1.verifyOtp()
+        ├── Check user is NOT already verified
+        ├── Load user + latest OTP from DB
+        ├── Check: email matches
+        ├── Check: OTP code matches
+        ├── Check: created_date < 3 minutes ago  ← expired if older
+        └── UPDATE tb_distributor_account SET is_verified = TRUE
+
+Account is now ACTIVE and can log in.
+```
+
+---
+
+### STEP 3 — Login `POST /authorization/login`
+
+```
+Client sends: { email, password }
+        │
+        ▼
+JwtAuthenticationController.createAuthenticationToken()
+        │
+        ├── Check is_verified = TRUE in DB
+        │       └── if FALSE → auto-send new OTP and return 409
+        │
+        ├── AuthenticationManager.authenticate()
+        │       └── DaoAuthenticationProvider
+        │               ├── loadUserByUsername(email)  → fetch AppUser from DB
+        │               └── BCrypt.matches(rawPassword, hashedPassword)
+        │                       └── if wrong → 400 INVALID_PASSWORD
+        │
+        ├── JwtTokenUtil.generateToken()
+        │       └── Build JWT: subject=email, expiry=24h, signed with HS512
+        ├── getRoleIdByMail(email)
+        └── getUserIdByMail(email)
+
+Returns: { token, roleId, userId }
+```
+
+---
+
+### STEP 4 — Every Protected API Request
+
+```
+Client sends: Authorization: Bearer <token>
+        │
+        ▼
+CorsFilterConfiguration       ← Allow cross-origin request from browser
+        │
+        ▼
+JwtRequestFilter
+        ├── Extract token from "Bearer <token>" header
+        ├── JwtTokenUtil.getUsernameFromToken()  → decode email from token
+        │       └── if invalid/tampered → return 401 immediately
+        ├── loadUserByUsername(email)  → fetch user from DB
+        └── JwtTokenUtil.validateToken()
+                ├── email in token == email in DB?
+                └── token not expired?
+                        └── if OK → set user as authenticated
+        │
+        ▼
+SecurityConfig — check role permission
+        ├── /api/v1/distributor/**  → requires DISTRIBUTOR role (roleId = 1)
+        ├── /api/v1/retailer/**     → requires RETAILER role    (roleId = 2)
+        └── wrong role → 403 | no token → 401 JSON (JwtAuthenticationEntryPoint)
+        │
+        ▼
+Controller → Business Logic
+```
+
+---
+
+### STEP 5 — Change Password & Forget Password
+
+```
+── Change Password (requires login token) ────────────────────
+PUT /authorization/change-password
+        ├── BCrypt.matches(oldPassword, storedHash)  ← verify old password
+        ├── BCrypt.encode(newPassword)
+        └── UPDATE password in DB
+
+── Forget Password (no token needed, uses OTP) ───────────────
+PUT /authorization/forget?otp=1234&email=...&newPassword=...
+        ├── Load user + latest OTP from DB
+        ├── Check: OTP code matches
+        ├── Check: OTP created < 3 minutes ago
+        ├── BCrypt.encode(newPassword)
+        └── UPDATE password in DB
+```
+
+---
+
+### Security File Map
+
+| File | Role |
+|---|---|
+| `AppUser` | Spring UserDetails — holds email, hashed password, role |
+| `AppUserRepository` | SQL: insert / find / update users |
+| `OtpRepository` | SQL: generate and fetch OTP records |
+| `JwtUserDetailsServiceImpl` | Core logic: register, login helpers, passwords |
+| `OtpServiceImplV1` | Generate OTP, send email, verify OTP + expiry |
+| `JwtAuthenticationController` | Endpoints: `/register` `/login` `/change-password` `/forget` |
+| `OTPController` | Endpoints: `/otp/generate` `/otp/verify` |
+| `JwtTokenUtil` | Create and decode JWT tokens |
+| `JwtRequestFilter` | Validate token on every request |
+| `SecurityConfig` | Route access rules by role |
+| `JwtAuthenticationEntryPoint` | Return 401 JSON when unauthenticated |
+
+---
+
 ## Code Review & Improvement Plan
 
 > This section documents the findings from a full codebase review. Items are grouped by priority. Each item explains **what** the problem is and **why** it matters.

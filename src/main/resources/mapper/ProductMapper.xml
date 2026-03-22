@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+    WHAT IS THIS FILE?
+    ══════════════════
+    XML Mapper for ProductRepository.
+    Handles the global product table (tb_product) operations.
+    Not to be confused with ProductDistributorRepository which handles store-level product details.
+-->
+
+<mapper namespace="com.henheang.hphsar.repository.ProductRepository">
+
+    <!--
+        RESULT MAP — Product (basic)
+        ═════════════════════════════
+        Maps snake_case DB column names → camelCase Java field names.
+        The tb_product table has created_date, updated_date, is_active columns.
+    -->
+    <resultMap id="ProductResultMap" type="com.henheang.hphsar.model.product.Product">
+        <id     property="id"          column="id"/>
+        <result property="name"        column="name"/>
+        <result property="createdDate" column="created_date"/>
+        <result property="updatedDate" column="updated_date"/>
+        <result property="isActive"    column="is_active"/>
+    </resultMap>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         CHECK IF PRODUCT EXISTS BY NAME — case-insensitive match
+         ═══════════════════════════════════════════════════════════════════════
+         ILIKE → case-insensitive LIKE (PostgreSQL only)
+         ${name} → direct string substitution (used for ILIKE pattern matching)
+    -->
+
+    <select id="getProductValueExist" resultMap="ProductResultMap">
+        SELECT * FROM tb_product
+        WHERE name ILIKE '${name}'
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         ADD NEW PRODUCT — INSERT and return the inserted row
+         ═══════════════════════════════════════════════════════════════════════
+         Uses <select> because RETURNING * returns the full inserted row.
+         #{product.name} → accesses the name field of the ProductRequest object.
+         "product" comes from @Param("product") in the Java method.
+    -->
+
+    <select id="addNewProduct" resultMap="ProductResultMap">
+        INSERT INTO tb_product(name)
+        VALUES (#{product.name})
+        RETURNING *
+    </select>
+
+</mapper>

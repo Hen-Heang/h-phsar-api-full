@@ -1,0 +1,241 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+    WHAT IS THIS FILE?
+    ══════════════════
+    This is the XML Mapper for OtpRepository.
+    All SQL that was previously written as @Select annotations is now here.
+
+    namespace must match the full package path of OtpRepository.java exactly.
+    MyBatis uses this to link the XML to the correct Java interface.
+-->
+
+<mapper namespace="com.henheang.hphsar.repository.OtpRepository">
+
+    <!--
+        RESULT MAP — AppUser
+        ════════════════════
+        Used by queries that return a full AppUser object.
+        Maps snake_case DB column names → camelCase Java field names.
+
+        NOTE: We define this again here (also defined in AppUserMapper.xml)
+        because each XML file is independent. MyBatis loads them separately.
+        If you want to share a resultMap across files, you can use:
+        resultMap="com.henheang.hphsar.repository.AppUserRepository.AppUserResultMap"
+        But redefining it here keeps the file self-contained and easier to read.
+    -->
+    <resultMap id="AppUserResultMap" type="com.henheang.hphsar.model.appUser.AppUser">
+        <id     property="id"         column="id"/>
+        <result property="email"      column="email"/>
+        <result property="password"   column="password"/>
+        <result property="role"       column="role"/>
+        <result property="roleId"     column="role_id"/>
+        <result property="isVerified" column="is_verified"/>
+        <result property="isActive"   column="is_active"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — Otp
+        ════════════════
+        Used by queries that return an Otp object.
+        Maps DB column names to fields in com.henheang.hphsar.model.otp.Otp
+    -->
+    <resultMap id="OtpResultMap" type="com.henheang.hphsar.model.otp.Otp">
+        <id     property="id"          column="id"/>
+        <result property="accountId"   column="account_id"/>
+        <result property="otpCode"     column="otp_code"/>
+        <result property="email"       column="email"/>
+        <result property="createdDate" column="created_date"/>
+    </resultMap>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         CHECK IF USER IS ALREADY VERIFIED
+         ═══════════════════════════════════════════════════════════════════════
+         AND is_verified = TRUE → only returns a row if the account is active.
+         If the user is NOT verified, this query returns NULL.
+         The service layer checks: if null → not verified yet.
+    -->
+
+    <select id="checkIfActivatedByDistributorEmail" resultMap="AppUserResultMap">
+        SELECT  ta.id,
+                ta.email,
+                ta.password,
+                tr.name     AS role,
+                ta.role_id,
+                ta.is_verified,
+                ta.is_active
+        FROM    tb_distributor_account ta
+        JOIN    tb_role tr ON ta.role_id = tr.id
+        WHERE   ta.email       = #{email}
+        AND     ta.is_verified = TRUE
+    </select>
+
+    <select id="checkIfActivatedByRetailerEmail" resultMap="AppUserResultMap">
+        SELECT  ta.id,
+                ta.email,
+                ta.password,
+                tr.name     AS role,
+                ta.role_id,
+                ta.is_verified,
+                ta.is_active
+        FROM    tb_retailer_account ta
+        JOIN    tb_role tr ON ta.role_id = tr.id
+        WHERE   ta.email       = #{email}
+        AND     ta.is_verified = TRUE
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         GET USER BY EMAIL (all users, regardless of verification status)
+         ═══════════════════════════════════════════════════════════════════════
+         Used before generating OTP — we need to find the user first
+         to know their ID and roleId (1=distributor, 2=retailer).
+    -->
+
+    <select id="getUserDistributorByEmail" resultMap="AppUserResultMap">
+        SELECT  ta.id,
+                ta.email,
+                ta.password,
+                tr.name     AS role,
+                ta.role_id,
+                ta.is_verified,
+                ta.is_active
+        FROM    tb_distributor_account ta
+        JOIN    tb_role tr ON ta.role_id = tr.id
+        WHERE   ta.email = #{email}
+    </select>
+
+    <select id="getUserRetailerByEmail" resultMap="AppUserResultMap">
+        SELECT  ta.id,
+                ta.email,
+                ta.password,
+                tr.name     AS role,
+                ta.role_id,
+                ta.is_verified,
+                ta.is_active
+        FROM    tb_retailer_account ta
+        JOIN    tb_role tr ON ta.role_id = tr.id
+        WHERE   ta.email = #{email}
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         GENERATE OTP — INSERT new OTP record
+         ═══════════════════════════════════════════════════════════════════════
+         parameterType is not needed when @Param is used — MyBatis knows each
+         value by its named placeholder: #{currentUserId}, #{otpNumber}, etc.
+
+         RETURNING * → PostgreSQL returns the inserted row so we get back the Otp object.
+         This lets the service layer check: if otp == null → insert failed.
+
+         #{time} → the current timestamp, used later to check 3-minute expiry.
+    -->
+
+    <select id="generateDistributorOtp" resultMap="OtpResultMap">
+        INSERT INTO tb_distributor_otp
+            (distributor_account_id, otp_code, distributor_email, created_date)
+        VALUES
+            (#{currentUserId}, #{otpNumber}, #{email}, #{time})
+        RETURNING
+            id,
+            distributor_account_id  AS account_id,
+            otp_code,
+            distributor_email       AS email,
+            created_date
+    </select>
+
+    <select id="generateRetailerOtp" resultMap="OtpResultMap">
+        INSERT INTO tb_retailer_otp
+            (retailer_account_id, otp_code, retailer_email, created_date)
+        VALUES
+            (#{currentUserId}, #{otpNumber}, #{email}, #{time})
+        RETURNING
+            id,
+            retailer_account_id AS account_id,
+            otp_code,
+            retailer_email      AS email,
+            created_date
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         GET LATEST OTP BY EMAIL
+         ═══════════════════════════════════════════════════════════════════════
+         ORDER BY created_date DESC → sort newest first
+         LIMIT 1                    → only get the most recent one
+
+         WHY: A user may have requested OTP multiple times.
+              We always want to validate against the LATEST one they received.
+
+         AS account_id, AS email, AS created_date →
+              rename columns to match the OtpResultMap field names above.
+    -->
+
+    <select id="getDistributorOtpByEmail" resultMap="OtpResultMap">
+        SELECT  id,
+                distributor_account_id  AS account_id,
+                otp_code,
+                distributor_email       AS email,
+                created_date
+        FROM    tb_distributor_otp
+        WHERE   distributor_email = #{email}
+        ORDER BY created_date DESC
+        LIMIT 1
+    </select>
+
+    <select id="getRetailerOtpByEmail" resultMap="OtpResultMap">
+        SELECT  id,
+                retailer_account_id AS account_id,
+                otp_code,
+                retailer_email      AS email,
+                created_date
+        FROM    tb_retailer_otp
+        WHERE   retailer_email = #{email}
+        ORDER BY created_date DESC
+        LIMIT 1
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         VERIFY ACCOUNT — SET is_verified = TRUE
+         ═══════════════════════════════════════════════════════════════════════
+         After OTP is validated, mark the account as verified so the user can log in.
+         RETURNING '1' → returns the string "1" as confirmation the row was updated.
+         The service checks: if result equals "1" → success.
+
+         resultType="String" → the result is a single string value, not a full object.
+    -->
+
+    <select id="verifyDistributor" resultType="String">
+        UPDATE  tb_distributor_account
+        SET     is_verified = TRUE
+        WHERE   email = #{email}
+        RETURNING '1'
+    </select>
+
+    <select id="verifyRetailer" resultType="String">
+        UPDATE  tb_retailer_account
+        SET     is_verified = TRUE
+        WHERE   email = #{email}
+        RETURNING '1'
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         DELETE OTP AFTER USE
+         ═══════════════════════════════════════════════════════════════════════
+         <delete> tag is for DELETE SQL operations.
+         Called after OTP is successfully verified or used for forget-password.
+         This ensures each OTP code is one-time-use only.
+
+         #{email} → the email whose OTP records should be deleted.
+    -->
+
+    <delete id="deleteDistributorOtp">
+        DELETE FROM tb_distributor_otp
+        WHERE distributor_email = #{email}
+    </delete>
+
+    <delete id="deleteRetailerOtp">
+        DELETE FROM tb_retailer_otp
+        WHERE retailer_email = #{email}
+    </delete>
+
+</mapper>

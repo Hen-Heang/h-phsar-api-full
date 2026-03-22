@@ -5,153 +5,71 @@ import com.henheang.hphsar.model.appUser.AppUserRequest;
 import com.henheang.hphsar.model.jwt.JwtChangePasswordRequest;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Result;
-import org.apache.ibatis.annotations.Select;
 
+/**
+ * AppUserRepository — User Database Operations
+ *
+ * HOW MYBATIS XML WORKS (for beginners):
+ * ─────────────────────────────────────────
+ * Before (Annotation style):
+ *   The SQL query was written directly on the method using @Select("SELECT ...")
+ *   The column-to-field mapping was done using @Result(property="...", column="...")
+ *
+ * After (XML style):
+ *   1. This interface only declares the method name and parameters
+ *   2. The actual SQL is written in a separate XML file: AppUserMapper.xml
+ *   3. MyBatis connects them by matching:
+ *        - The @Mapper interface full class name  →  namespace in XML
+ *        - The method name here                  →  id="..." in XML
+ *
+ * Example connection:
+ *   Java:  AppUser findDistributorUserByEmail(String email)
+ *   XML:   <select id="findDistributorUserByEmail" ...>SELECT ...</select>
+ *
+ * WHY THIS IS BETTER:
+ *   - SQL is in its own file — easier to read and format
+ *   - No more messy @Result annotations on every method
+ *   - ResultMap is defined once in XML and reused everywhere
+ *   - Supports dynamic SQL (<if>, <foreach>) which @Select cannot do
+ */
 @Mapper
 public interface AppUserRepository {
-    @Select("""
-            INSERT INTO tb_distributor_account
-            VALUES (
-                    DEFAULT, #{user.roleId}, #{user.email}, #{user.password}, DEFAULT, DEFAULT, DEFAULT, DEFAULT
-                   )
-            RETURNING *;
-            """)
-    @Result(property = "isVerified", column = "is_verified")
-    @Result(property = "isActive", column = "is_active")
-    @Result(property = "roleId", column = "role_id")
-    AppUser insertDistributorUser(@Param("user") AppUserRequest appUserRequest);
 
-    @Select("""
-            INSERT INTO tb_retailer_account
-            VALUES (
-                    DEFAULT, #{user.roleId}, #{user.email}, #{user.password}, DEFAULT, DEFAULT, DEFAULT, DEFAULT
-                   )
-            RETURNING *;
-            """)
-    @Result(property = "isVerified", column = "is_verified")
-    @Result(property = "isActive", column = "is_active")
-    @Result(property = "roleId", column = "role_id")
+    // ─── INSERT ────────────────────────────────────────────────────────────────
+    // @Param("user") tells MyBatis: the parameter named "user" in XML = appUserRequest here
+    // In XML you access it as #{user.email}, #{user.password}, #{user.roleId}
+    AppUser insertDistributorUser(@Param("user") AppUserRequest appUserRequest);
     AppUser insertRetailerUser(@Param("user") AppUserRequest appUserRequest);
 
-    @Select("""
-            SELECT ta.id as id, email, password, tr.name as role, role_id as roleId, is_verified as isVerified, is_active as isActive 
-            FROM tb_distributor_account as ta
-            JOIN tb_role tr ON ta.role_id = tr.id
-            WHERE email = #{email};
-            """)
-    @Result(property = "userId", column = "user_id")
+    // ─── SELECT BY EMAIL ───────────────────────────────────────────────────────
+    // MyBatis matches the parameter #{email} in XML to the String email argument here
     AppUser findDistributorUserByEmail(String email);
-
-    @Select("""
-            SELECT ta.id as id, email, password, tr.name as role, role_id as roleId, is_verified as isVerified, is_active as isActive FROM tb_distributor_account as ta
-            JOIN tb_role tr ON ta.role_id = tr.id
-            WHERE ta.id = #{id};
-            """)
-    @Result(property = "userId", column = "user_id")
     AppUser findDistributorUserById(Integer id);
-
-    @Select("""
-            SELECT ta.id as id, email, password, tr.name as role, role_id as roleId, is_verified as isVerified, is_active as isActive 
-            FROM tb_retailer_account as ta
-            JOIN tb_role tr ON ta.role_id = tr.id
-            WHERE email = #{email};
-            """)
-    @Result(property = "userId", column = "user_id")
     AppUser findRetailerUserByEmail(String email);
 
-
-    @Select("""
-            SELECT exists(SELECT phone_number FROM tb_distributor_phone WHERE phone_number = #{phone});
-            """)
+    // ─── CHECK DUPLICATE PHONE ─────────────────────────────────────────────────
     Boolean checkPhoneNumberFromDistributorPhone(String phone);
-
-    @Select("""
-            SELECT exists(SELECT primary_phone_number FROM tb_distributor_info WHERE primary_phone_number = #{phone});
-            """)
     Boolean checkPhoneNumberFromDistributorDetail(String phone);
-
-    @Select("""
-            SELECT exists(SELECT phone_number FROM tb_retailer_phone WHERE phone_number = #{phone});
-            """)
     Boolean checkPhoneNumberFromRetailerPhone(String phone);
-
-    @Select("""
-            SELECT exists(SELECT primary_phone_number FROM tb_retailer_info WHERE primary_phone_number = #{phone});
-            """)
     Boolean checkPhoneNumberFromRetailerDetail(String phone);
 
-    @Select("""
-            SELECT role_id FROM tb_distributor_account
-            WHERE email = #{email};
-            """)
+    // ─── GET ROLE ID ───────────────────────────────────────────────────────────
     Integer getRoleIdByMail(String email);
-
-    @Select("""
-            SELECT role_id FROM tb_retailer_account
-            WHERE email = #{email};
-            """)
     Integer getRoleIdByMailRetailer(String email);
 
-    @Select("""
-            SELECT is_verified FROM tb_distributor_account
-            WHERE email = #{email};
-            """)
+    // ─── GET VERIFICATION STATUS ───────────────────────────────────────────────
     Boolean getVerifyDistributorEmail(String email);
-
-    @Select("""
-            SELECT is_verified FROM tb_retailer_account
-            WHERE email = #{email};
-            """)
     Boolean getVerifyRetailerEmail(String email);
 
-    @Select("""
-            update tb_distributor_account
-            set password = #{newPassword}
-            where email = #{email}
-            returning *;
-            """)
-    @Result(property = "isVerified", column = "is_verified")
-    @Result(property = "isActive", column = "is_active")
-    @Result(property = "roleId", column = "role_id")
+    // ─── UPDATE PASSWORD ───────────────────────────────────────────────────────
+    // @Param is needed here because the method has multiple parameters
+    // Without @Param, MyBatis cannot tell which is #{email} and which is #{newPassword}
     AppUser updateDistributorUser(JwtChangePasswordRequest request);
-
-    @Select("""
-            update tb_retailer_account
-            set password = #{newPassword}
-            where email = #{email}
-            returning *;
-            """)
-    @Result(property = "isVerified", column = "is_verified")
-    @Result(property = "isActive", column = "is_active")
-    @Result(property = "roleId", column = "role_id")
     AppUser updateRetailerUser(JwtChangePasswordRequest request);
+    String updateForgetDistributorUser(@Param("email") String email, @Param("newPassword") String newPassword);
+    String updateForgetRetailerUser(@Param("email") String email, @Param("newPassword") String newPassword);
 
-    @Select("""
-            update tb_distributor_account
-            set password = #{newPassword}
-            where email = #{email}
-            returning password;
-            """)
-    String updateForgetDistributorUser(String email, String newPassword);
-
-    @Select("""
-            update tb_retailer_account
-            set password = #{newPassword}
-            where email = #{email}
-            returning password;
-            """)
-    String updateForgetRetailerUser(String email, String newPassword);
-
-    @Select("""
-            SELECT id FROM tb_distributor_account
-            WHERE email = #{email};
-            """)
+    // ─── GET USER ID ───────────────────────────────────────────────────────────
     Integer getUserIdByMailDistributor(String email);
-
-    @Select("""
-            SELECT id FROM tb_retailer_account
-            WHERE email = #{email};
-            """)
     Integer getUserIdByMailRetailer(String email);
 }

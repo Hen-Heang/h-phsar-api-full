@@ -1,5 +1,6 @@
 package com.henheang.hphsar.service.implement;
 
+import com.henheang.hphsar.common.utils.OtpUtils;
 import com.henheang.hphsar.exception.BadRequestException;
 import com.henheang.hphsar.exception.ConflictException;
 import com.henheang.hphsar.exception.InternalServerErrorException;
@@ -13,207 +14,285 @@ import com.henheang.hphsar.repository.AppUserRepository;
 import com.henheang.hphsar.repository.OtpRepository;
 import com.henheang.hphsar.service.JwtUserDetailsService;
 import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * JwtUserDetailsServiceImpl — Core User & Auth Business Logic
+ * <p>
+ * Implements two interfaces:
+ *   - UserDetailsService (Spring Security) → loadUserByUsername() used during login
+ *   - JwtUserDetailsService (our own) → register, change password, forget password
+ * <p>
+ * PROCESSES:
+ *   insertUser()      → register new account with validation + BCrypt hashing
+ *   loadUserByUsername() → load user from DB for Spring Security authentication
+ *   getVerifyEmail()  → check if email is verified before allowing login
+ *   changePassword()  → verify old password then update to new BCrypt hash
+ *   forgetPassword()  → reset password using OTP verification
+ */
 @Service
 public class JwtUserDetailsServiceImpl implements UserDetailsService, JwtUserDetailsService {
 
     private final AppUserRepository appUserRepository;
     private final OtpRepository otpRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final ModelMapper modelMapper;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private ModelMapper modelMapper;
-
-    public JwtUserDetailsServiceImpl(AppUserRepository appUserRepository, OtpRepository otpRepository) {
+    // FIX 5: Use constructor injection for ALL dependencies
+    // WHY: @Autowired field injection is harder to unit test and hides dependencies.
+    //      Constructor injection makes dependencies explicit and easy to see.
+    public JwtUserDetailsServiceImpl(AppUserRepository appUserRepository,
+                                     OtpRepository otpRepository,
+                                     PasswordEncoder passwordEncoder,
+                                     ModelMapper modelMapper) {
         this.appUserRepository = appUserRepository;
         this.otpRepository = otpRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.modelMapper = modelMapper;
     }
 
-    Boolean checkDuplicatePhone(String phone, Integer roleId){
-        Boolean isExistInUserPhone = false;
-        Boolean isExistInUserInfo = false;
+    // ─── Email Validation ───────────────────────────────────────────────────────
 
-        if (roleId == 1) {
-            isExistInUserPhone = appUserRepository.checkPhoneNumberFromDistributorPhone(phone);
-            isExistInUserInfo = appUserRepository.checkPhoneNumberFromDistributorDetail(phone);
-        } else {
-            isExistInUserPhone = appUserRepository.checkPhoneNumberFromRetailerPhone(phone);
-            isExistInUserInfo = appUserRepository.checkPhoneNumberFromRetailerDetail(phone);
-        }
-        if (isExistInUserPhone || isExistInUserInfo){
-            return true;
-        }
-        return false;
-    }
-
+    // Regex pattern: allows standard email formats like user@domain.com
     private static final String EMAIL_PATTERN = "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,6}$";
-    private Pattern pattern = Pattern.compile(EMAIL_PATTERN);
+    private final Pattern pattern = Pattern.compile(EMAIL_PATTERN);
 
-    public boolean validateEmail(final String email) {
+    private boolean validateEmail(final String email) {
         Matcher matcher = pattern.matcher(email);
         return matcher.matches();
     }
 
+    // ─── Load User For Spring Security ─────────────────────────────────────────
+
+    /**
+     * Called by Spring Security during authentication (login).
+     * Searches distributor table first, then retailer table.
+     * Returns AppUser which implements UserDetails.
+     */
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
+        // Try distributor account first
         UserDetails user = appUserRepository.findDistributorUserByEmail(email);
-        if (user == null){
+        if (user == null) {
+            // If not found, try retailer account
             user = appUserRepository.findRetailerUserByEmail(email);
         }
-        if (user == null){
+        if (user == null) {
             throw new BadRequestException("Invalid email address. Please input valid email address.");
         }
         return user;
     }
 
+    // ─── Register New User ──────────────────────────────────────────────────────
+
+    /**
+     * PROCESS — insertUser():
+     *   1. Validate roleId (must be 1 or 2)
+     *   2. Validate email is not blank + matches email format
+     *   3. FIX 2: Validate password BEFORE encoding (was after, so check never worked)
+     *   4. Check for duplicate email
+     *   5. Encode password with Bcrypt
+     *   6. Insert into correct DB table based on role
+     */
     @Override
     public AppUserDto insertUser(AppUserRequest appUserRequest) {
-        if (!(appUserRequest.getRoleId().equals(1)|| appUserRequest.getRoleId().equals(2))){
-            throw new BadRequestException("Invalid roleId.");
+
+        // Step 1: Validate role — only 1 (DISTRIBUTOR) or 2 (RETAILER) allowed
+        if (!(appUserRequest.getRoleId().equals(1) || appUserRequest.getRoleId().equals(2))) {
+            throw new BadRequestException("Invalid roleId. Use 1 for DISTRIBUTOR or 2 for RETAILER.");
         }
-        if (appUserRequest.getEmail().isBlank()){
-            throw new BadRequestException("Email can not be null");
+
+        // Step 2: Validate email
+        if (appUserRequest.getEmail().isBlank()) {
+            throw new BadRequestException("Email cannot be empty.");
         }
-        if (!(validateEmail(appUserRequest.getEmail()))){
-            throw new BadRequestException("Please follow email format.");
+        if (!validateEmail(appUserRequest.getEmail())) {
+            throw new BadRequestException("Please follow email format (e.g. user@domain.com).");
         }
-        if (appUserRequest.getPassword().isBlank()){
-            throw new BadRequestException("Password can not be null");
+
+        // Step 3 (FIX 2): Validate password BEFORE encoding
+        // WHY: After Bcrypt encoding, the password becomes a hash like "$2a$10$..."
+        //      Checking .equals("string") on a hash will ALWAYS be false — the check never works.
+        //      We must validate the raw password BEFORE encoding it.
+        if (appUserRequest.getPassword().isBlank() || appUserRequest.getPassword().equals("string")) {
+            throw new BadRequestException("Invalid password. Please provide a real password.");
         }
-        appUserRequest.setPassword(passwordEncoder.encode((appUserRequest.getPassword())));
-        AppUser appUser = null;
+
+        // Step 4: Check if email is already registered (in either table)
         AppUser checkDuplicate = appUserRepository.findDistributorUserByEmail(appUserRequest.getEmail());
         AppUser checkDuplicateRetailer = appUserRepository.findRetailerUserByEmail(appUserRequest.getEmail());
-        if (checkDuplicate != null || checkDuplicateRetailer != null){
-            throw new ConflictException("This email is already taken");
+        if (checkDuplicate != null || checkDuplicateRetailer != null) {
+            throw new ConflictException("This email is already taken.");
         }
-        if (appUserRequest.getRoleId() == 1) {
-            if (appUserRequest.getPassword().equals("string") || appUserRequest.getPassword().isBlank()) {
-                throw new BadRequestException("Invalid password");
-            }
-            appUser = appUserRepository.insertDistributorUser(appUserRequest);
-        }else if (appUserRequest.getRoleId() == 2){
 
-            if (appUserRequest.getPassword().equals("string") || appUserRequest.getPassword().isBlank()) {
-                throw new BadRequestException("Invalid password");
-            }
+        // Step 5: Encode password with Bcrypt AFTER all validations pass
+        // Bcrypt adds a random salt and hashes the password — never stores plain text
+        appUserRequest.setPassword(passwordEncoder.encode(appUserRequest.getPassword()));
+
+        // Step 6: Insert into the correct table based on role
+        AppUser appUser;
+        if (appUserRequest.getRoleId() == 1) {
+            appUser = appUserRepository.insertDistributorUser(appUserRequest);
+        } else {
             appUser = appUserRepository.insertRetailerUser(appUserRequest);
         }
+
+        // Map AppUser entity to AppUserDto (safe response — no password returned)
         return modelMapper.map(appUser, AppUserDto.class);
     }
 
+    // ─── Check Email Verification Status ───────────────────────────────────────
+
+    /**
+     * Called during login to check if user has verified their email via OTP.
+     * Returns true if verified, false if not yet verified.
+     */
     @Override
     public boolean getVerifyEmail(String email) {
+        // Try distributor first, then retailer
         Boolean isVerified = appUserRepository.getVerifyDistributorEmail(email);
-        if (isVerified == null){
+        if (isVerified == null) {
             isVerified = appUserRepository.getVerifyRetailerEmail(email);
         }
-        if (isVerified == null){
+        if (isVerified == null) {
             throw new BadRequestException("Email does not exist.");
         }
         return isVerified;
     }
 
+    // ─── Change Password (logged-in user) ──────────────────────────────────────
+
+    /**
+     * PROCESS — changePassword():
+     *   1. Find user by email
+     *   2. Verify old password matches stored Bcrypt hash
+     *   3. Encode new password with Bcrypt
+     *   4. Update DB with new hashed password
+     */
     @Override
     public AppUserDto changePassword(JwtChangePasswordRequest request) {
+        // Step 1: Find user — try distributor first, then retailer
         boolean isDistributor = true;
         AppUser appUser = appUserRepository.findDistributorUserByEmail(request.getEmail());
-        if (appUser == null){
+        if (appUser == null) {
             isDistributor = false;
             appUser = appUserRepository.findRetailerUserByEmail(request.getEmail());
         }
-        if (appUser == null){
-            throw new NotFoundException("Not found. Invalid email.");
+        if (appUser == null) {
+            throw new NotFoundException("User not found. Invalid email.");
         }
-        // verify password with encrypted password
-        if (!(passwordEncoder.matches(request.getOldPassword(), appUser.getPassword()))){
-            throw new NotFoundException("Old password is incorrect. Please input correct password.");
+
+        // Step 2: Verify old password matches the stored BCrypt hash
+        // BCrypt.matches() compares raw password against hash safely
+        if (!passwordEncoder.matches(request.getOldPassword(), appUser.getPassword())) {
+            throw new NotFoundException("Old password is incorrect.");
         }
-        // if match encrypt new password and update database password
+
+        // Step 3: Encode the new password before saving
         request.setNewPassword(passwordEncoder.encode(request.getNewPassword()));
-        AppUser newAppUser = new AppUser();
-        if (isDistributor){
-            newAppUser = appUserRepository.updateDistributorUser(request);
+
+        // Step 4: Update password in DB
+        AppUser updatedUser;
+        if (isDistributor) {
+            updatedUser = appUserRepository.updateDistributorUser(request);
         } else {
-            newAppUser = appUserRepository.updateRetailerUser(request);
+            updatedUser = appUserRepository.updateRetailerUser(request);
         }
-        return modelMapper.map(newAppUser, AppUserDto.class);
+
+        return modelMapper.map(updatedUser, AppUserDto.class);
     }
 
+    // ─── Forget Password (uses OTP) ─────────────────────────────────────────────
+
+    /**
+     * PROCESS — forgetPassword():
+     *   1. Find user + their latest OTP from DB
+     *   2. Validate OTP: email matches, code matches, not expired
+     *   3. Encode new password and update DB
+     *   4. FIX 3: Delete OTP after use so it cannot be reused
+     *   5. FIX 1: Return success message only (no plain text password in response)
+     */
     @Override
     public String forgetPassword(Integer otp, String email, String newPassword) {
-        // check if user is exists
-        Boolean isDistributor = true;
-        Otp otpObj = null;
+
+        // Step 1: Find user and their latest OTP
+        boolean isDistributor = true;
         AppUser appUser = appUserRepository.findDistributorUserByEmail(email);
-        otpObj = otpRepository.getDistributorOtpByEmail(email);
-        if (appUser == null || otpObj == null){
+        Otp otpObj = otpRepository.getDistributorOtpByEmail(email);
+
+        if (appUser == null || otpObj == null) {
             isDistributor = false;
             appUser = appUserRepository.findRetailerUserByEmail(email);
             otpObj = otpRepository.getRetailerOtpByEmail(email);
         }
-        if (appUser == null){
-            throw new NotFoundException("Not found. Invalid email.");
+
+        if (appUser == null) {
+            throw new NotFoundException("User not found. Invalid email.");
         }
-        if (otpObj == null){
-            throw new BadRequestException("This OTP does not exist");
+        if (otpObj == null) {
+            throw new BadRequestException("No OTP found. Please request a new OTP first.");
         }
-        // check if request and database of OTP matches
+
+        // Step 2: Validate the OTP
         if (!Objects.equals(appUser.getEmail(), otpObj.getEmail())) {
-            throw new BadRequestException("Email not match");
-        } else if (!Objects.equals(otpObj.getOtpCode(), otp)) {
-            throw new BadRequestException("OTP code not match");
+            throw new BadRequestException("Email does not match OTP record.");
         }
-        // check timeout of 3 minutes
-        else if (!lessThan3MinutesCheck(otpObj.getCreatedDate())) {
-            throw new BadRequestException("OTP Expired");
+        if (!Objects.equals(otpObj.getOtpCode(), otp)) {
+            throw new BadRequestException("OTP code is incorrect.");
         }
-        // update new password
-        String updatedPassword = "null";
+        // FIX 4: Using shared OtpUtils instead of duplicate local method
+        if (!OtpUtils.isNotExpired(otpObj.getCreatedDate())) {
+            throw new BadRequestException("OTP has expired. Please request a new one.");
+        }
+
+        // Step 3: Encode and save the new password
         String encodedNewPassword = passwordEncoder.encode(newPassword);
+        String updatedPassword;
         if (isDistributor) {
             updatedPassword = appUserRepository.updateForgetDistributorUser(email, encodedNewPassword);
         } else {
             updatedPassword = appUserRepository.updateForgetRetailerUser(email, encodedNewPassword);
         }
-        if (Objects.equals(updatedPassword, "null")){
-            throw new InternalServerErrorException("Fail to update new password.");
+
+        if (Objects.equals(updatedPassword, "null") || updatedPassword == null) {
+            throw new InternalServerErrorException("Failed to update password. Please try again.");
         }
-        return "New password updated. Your new password is: "+ newPassword;
+
+        // Step 4 (FIX 3): Delete OTP after use — one-time use only
+        // WHY: If we don't delete, the same OTP could be reused to change the
+        //      password again without the user knowing.
+        otpRepository.deleteDistributorOtp(email);
+        otpRepository.deleteRetailerOtp(email);
+
+        // Step 5 (FIX 1): Return only a success message — NEVER return the plain text password
+        // WHY: If the response is intercepted (man-in-the-middle), the attacker
+        //      would get the user's new password in plain text.
+        return "Password updated successfully. Please log in with your new password.";
     }
 
+    // ─── Role & User ID Helpers ─────────────────────────────────────────────────
 
+    // Gets the role ID for a given email — checks distributor first, then retailer
     public Integer getRoleIdByMail(String email) {
         Integer roleId = appUserRepository.getRoleIdByMail(email);
-        if (roleId == null){
+        if (roleId == null) {
             roleId = appUserRepository.getRoleIdByMailRetailer(email);
         }
         return roleId;
     }
-    public Boolean lessThan3MinutesCheck(Date createdDate) {
-        Date currentDate = new Date();
-        long diffInMillis = Math.abs(currentDate.getTime() - createdDate.getTime());
-        long diffInMinutes = TimeUnit.MINUTES.convert(diffInMillis, TimeUnit.MILLISECONDS);
-        return diffInMinutes < 3;
-    }
 
+    // Gets the user ID for a given email — checks distributor first, then retailer
     public Integer getUserIdByMail(String email) {
         Integer userId = appUserRepository.getUserIdByMailDistributor(email);
-        if (userId == null){
+        if (userId == null) {
             userId = appUserRepository.getUserIdByMailRetailer(email);
         }
         return userId;

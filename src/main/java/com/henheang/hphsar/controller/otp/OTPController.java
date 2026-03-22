@@ -11,42 +11,75 @@ import org.springframework.web.bind.annotation.*;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
+/**
+ * OTPController — OTP Endpoints
+ *
+ * All endpoints here are PUBLIC (no token required).
+ * Configured in SecurityConfig → .requestMatchers("/authorization/**").permitAll()
+ *
+ * Endpoints:
+ *   POST /authorization/api/v1/otp/generate → send OTP code to email
+ *   POST /authorization/api/v1/otp/verify   → verify OTP code and activate account
+ */
 @RestController
 @CrossOrigin(origins = "*")
 @Tag(name = "Generate OTP")
 @RequestMapping("/authorization/api/v1/otp")
 public class OTPController {
 
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    Date date;
     private final OtpService otpService;
+
+    // FIX 7: Removed shared `Date date` field — replaced with local new Date() per method
+    // WHY: Shared mutable state across concurrent requests can cause wrong timestamps.
+    private final SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
     public OTPController(OtpService otpService) {
         this.otpService = otpService;
     }
 
+    // ─── Generate OTP ───────────────────────────────────────────────────────────
+
+    /**
+     * PROCESS:
+     *   1. Validate user exists by email
+     *   2. FIX 8: Check if valid OTP already sent recently (rate limiting)
+     *   3. Generate random 4-digit OTP
+     *   4. Save to DB with timestamp
+     *   5. Send OTP to email
+     */
     @PostMapping("/generate")
-    public ResponseEntity<?> generateOtp(@RequestParam String email){
+    public ResponseEntity<?> generateOtp(@RequestParam String email) {
         String otpResponse = otpService.generateOtp(email);
         ApiResponse<String> response = ApiResponse.<String>builder()
                 .status(HttpStatus.CREATED.value())
                 .message("New OTP generated.")
                 .data(otpResponse)
-                .date(formatter.format(date = new Date()))
+                .date(formatter.format(new Date())) // FIX 7: local new Date()
                 .build();
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    // ─── Verify OTP ─────────────────────────────────────────────────────────────
+
+    /**
+     * PROCESS:
+     *   1. Validate OTP is within Integer range
+     *   2. Load user + latest OTP from DB
+     *   3. Validate: email matches, code matches, not expired (< 3 min)
+     *   4. Mark account as verified in DB (is_verified = true)
+     *   5. FIX 3: Delete OTP from DB after successful use
+     */
     @PostMapping("/verify")
-    public ResponseEntity<?> activateAccount(@RequestParam Integer otp, @RequestParam String email){
-        if (otp > 2147483646){
-            throw new BadRequestException("Integer value can not exceed 2147483646");
+    public ResponseEntity<?> activateAccount(@RequestParam Integer otp, @RequestParam String email) {
+        // Guard: Java Integer max is 2147483647 — prevent overflow issues
+        if (otp > 2147483646) {
+            throw new BadRequestException("Integer value cannot exceed 2147483646.");
         }
         ApiResponse<String> response = ApiResponse.<String>builder()
                 .status(HttpStatus.OK.value())
-                .message("Activated successfully")
+                .message("Account activated successfully.")
                 .data(otpService.verifyOtp(otp, email))
-                .date(formatter.format(date = new Date()))
+                .date(formatter.format(new Date())) // FIX 7: local new Date()
                 .build();
         return ResponseEntity.ok(response);
     }

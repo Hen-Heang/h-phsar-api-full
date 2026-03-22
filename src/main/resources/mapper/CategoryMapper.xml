@@ -2,22 +2,222 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
+<!--
+    WHAT IS THIS FILE?
+    ══════════════════
+    XML Mapper for CategoryRepository.
+    Handles category management for distributor stores.
+
+    Two types of operations:
+    1. tb_category — the global category table (name, created_date, updated_date)
+    2. tb_store_category — the join table linking categories to a specific store
+-->
+
 <mapper namespace="com.henheang.hphsar.repository.CategoryRepository">
-    
-    <resultMap id="CategoryResultMap" type="com.henheang.hphsar.repository.CategoryRepository">
-        <id property="id" column="id"/>
-        <result property="name" column="name"/>
-        <result property="createdAt" column="created_at"/>
-        <result property="updatedAt" column="updated_at"/>
+
+    <!--
+        RESULT MAP — Category (simple)
+        ════════════════════════════════
+        Maps snake_case DB columns → camelCase Java fields.
+        Used for direct SELECT * FROM tb_category queries.
+    -->
+    <resultMap id="CategoryResultMap" type="com.henheang.hphsar.model.category.Category">
+        <id     property="id"          column="id"/>
+        <result property="name"        column="name"/>
+        <result property="createdDate" column="created_date"/>
+        <result property="updatedDate" column="updated_date"/>
     </resultMap>
 
-    <select id="getCategoryById" resultMap="CategoryResultMap">
-        SELECT c.id,
-               c.name,
-               c.created_at,
-               c.updated_at
-        FROM tb_store_category sc JOIN  tb_category c ON c.id = sc.category_id
-        WHERE  sc.category_id = #{id} AND sc.store_id = #{storeId}
+    <!--
+        RESULT MAP — Category (from store_category join with nested selects)
+        ════════════════════════════════════════════════════════════════════════
+        Used when querying tb_store_category — the primary column is category_id,
+        not id. We use nested @One selects to look up name/dates from tb_category.
+
+        WHY nested selects?
+        The original getAllCategory query selects from tb_store_category
+        which only has store_id and category_id. To get the name and dates,
+        it calls helper methods getCategoryNameById, getCategoryCreatedDateById, etc.
+    -->
+    <resultMap id="StoreCategoryResultMap" type="com.henheang.hphsar.model.category.Category">
+        <id     property="id"          column="category_id"/>
+        <!--
+            <association> for single-value nested selects:
+            - column="category_id" → passes the category_id value to the sub-select
+            - select="..."         → the sub-select method that returns the value
+        -->
+        <association property="name"        column="category_id" select="getCategoryNameById"/>
+        <association property="createdDate" column="category_id" select="getCategoryCreatedDateById"/>
+        <association property="updatedDate" column="category_id" select="getCategoryUpdatedById"/>
+    </resultMap>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         CHECK DUPLICATE CATEGORY — case-insensitive
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <select id="getDuplicateCategory" resultMap="CategoryResultMap">
+        SELECT * FROM tb_category WHERE name ILIKE #{name}
+    </select>
+
+    <select id="checkIfExist" resultType="boolean">
+        SELECT EXISTS(SELECT name FROM tb_category WHERE name ILIKE #{name})
+    </select>
+
+    <select id="checkDuplicateCategory" resultType="boolean">
+        SELECT EXISTS(SELECT * FROM tb_category WHERE name ILIKE #{name})
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         INSERT — create new category and return the inserted row
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <select id="insertCategory" resultMap="CategoryResultMap">
+        INSERT INTO tb_category(name) VALUES (#{category.name}) RETURNING *
+    </select>
+
+    <select id="createNewCategory" resultType="int">
+        INSERT INTO tb_category(name) VALUES (#{name}) RETURNING id
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         STORE CATEGORY OPERATIONS (tb_store_category)
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <insert id="addCategoryToStore">
+        INSERT INTO tb_store_category(store_id, category_id) VALUES (#{storeId}, #{categoryId})
+    </insert>
+
+    <select id="createNewStoreCategory" resultMap="StoreCategoryResultMap">
+        INSERT INTO tb_store_category VALUES (DEFAULT, #{storeId}, #{newCategoryId}) RETURNING category_id
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         GET CATEGORIES (paginated) — from tb_store_category join
+         ═══════════════════════════════════════════════════════════════════════
+         Queries tb_store_category which only has store_id and category_id.
+         The StoreCategoryResultMap uses nested selects to fetch name and dates.
+    -->
+
+    <select id="getAllCategory" resultMap="StoreCategoryResultMap">
+        SELECT * FROM tb_store_category
+        WHERE store_id = #{storeId}
+        ORDER BY category_id ASC
+        LIMIT #{pageSize}
+        OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getCategoryById" resultMap="StoreCategoryResultMap">
+        SELECT * FROM tb_store_category
+        WHERE category_id = #{id}
+          AND store_id = #{storeId}
+    </select>
+
+    <select id="getCategoryByCurrentUserId" resultMap="CategoryResultMap">
+        SELECT TCG.id, name, created_date, updated_date
+        FROM tb_category TCG
+                 INNER JOIN tb_store_category TSC ON TCG.id = TSC.category_id
+        WHERE TSC.store_id = #{storeId}
+    </select>
+
+    <select id="searchCategoryByName" resultMap="StoreCategoryResultMap">
+        SELECT * FROM tb_store_category
+        WHERE store_id = #{storeId}
+          AND category_id IN (SELECT id FROM tb_category WHERE name ILIKE CONCAT('%', #{name}, '%'))
+        ORDER BY category_id ASC
+        LIMIT #{pageSize}
+        OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         EDIT AND DELETE CATEGORY
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <select id="editCategory" resultMap="StoreCategoryResultMap">
+        UPDATE tb_store_category
+        SET category_id = #{categoryId}
+        WHERE store_id = #{storeId}
+          AND category_id = #{id}
+        RETURNING category_id
+    </select>
+
+    <select id="deleteCategory" resultType="String">
+        DELETE FROM tb_store_category
+        WHERE category_id = #{id}
+          AND store_id = #{storeId}
+        RETURNING category_id
+    </select>
+
+    <!-- ─── HELPERS ──────────────────────────────────────────────────────────── -->
+
+    <select id="getStoreIdByCurrentUserId" resultType="int">
+        SELECT id FROM tb_store WHERE distributor_account_id = #{userId}
+    </select>
+
+    <select id="getCategoryInCurrentStoreId" resultType="int">
+        SELECT id FROM tb_store_category
+        WHERE store_id = #{storeId} AND category_id = #{categoryId}
+    </select>
+
+    <select id="getCategoryNameById" resultType="String">
+        SELECT name FROM tb_category WHERE id = #{id}
+    </select>
+
+    <select id="getCategoryCreatedDateById" resultType="String">
+        SELECT created_date AS createdDate FROM tb_category WHERE id = #{id}
+    </select>
+
+    <select id="getCategoryUpdatedById" resultType="String">
+        SELECT updated_date AS updatedDate FROM tb_category WHERE id = #{id}
+    </select>
+
+    <select id="getCategoryIdByName" resultType="int">
+        SELECT id FROM tb_category WHERE name ILIKE #{name}
+    </select>
+
+    <select id="checkIfStoreCategoryDuplicate" resultType="boolean">
+        SELECT EXISTS(SELECT * FROM tb_store_category WHERE store_id = #{storeId} AND category_id = #{categoryId})
+    </select>
+
+    <select id="findTotalCategory" resultType="int">
+        SELECT count(*) FROM tb_store_category WHERE store_id = #{storeId}
+    </select>
+
+    <select id="storeIsExist" resultType="boolean">
+        SELECT EXISTS(SELECT * FROM tb_store WHERE distributor_account_id = #{currentUserId})
+    </select>
+
+    <select id="getCategories" resultType="int">
+        SELECT count(*) FROM tb_store_category WHERE store_id = #{storeId}
+    </select>
+
+    <select id="moveProductCategory" resultType="String">
+        UPDATE tb_store_product_detail
+        SET category_id = 113
+        WHERE category_id = #{id}
+          AND store_id = #{storeId}
+        RETURNING 113
+    </select>
+
+    <select id="checkIfCategoryHaveProduct" resultType="boolean">
+        SELECT EXISTS(
+            SELECT * FROM tb_store_product_detail
+            WHERE store_id = #{storeId} AND category_id = #{id}
+        )
+    </select>
+
+    <update id="replaceProductCategory">
+        UPDATE tb_store_product_detail
+        SET category_id = #{newId}
+        WHERE category_id = #{oldId}
+          AND store_id = #{storeId}
+    </update>
+
+    <select id="getCategoryIdByProductId" resultType="int">
+        SELECT category_id FROM tb_store_product_detail WHERE id = #{id}
     </select>
 
 </mapper>

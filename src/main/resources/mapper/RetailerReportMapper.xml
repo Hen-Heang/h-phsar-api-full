@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+    WHAT IS THIS FILE?
+    ══════════════════
+    XML Mapper for RetailerReportRepository.
+    All queries return simple types (Integer, Double, List<String>, List<Integer>)
+    or a mapped object — no complex nested resultMaps needed.
+-->
+
+<mapper namespace="com.henheang.hphsar.repository.RetailerReportRepository">
+
+    <!--
+        RESULT MAP — CategoryNameAndTotalOfQty
+        ════════════════════════════════════════
+        Used by getCategoryNameAndTotalItem.
+        Query aliases columns to match Java field names.
+    -->
+    <resultMap id="CategoryQtyResultMap" type="com.henheang.hphsar.model.retailer.report.CategoryNameAndTotalOfQty">
+        <result property="totalItem"     column="totalItem"/>
+        <result property="categoryName"  column="categoryName"/>
+    </resultMap>
+
+    <!-- ─── CURRENT MONTH STATS ─────────────────────────────────────────────── -->
+
+    <select id="getTotalMonthlyOrderByCurrentMonth" resultType="int">
+        SELECT count(*) AS totalOrder FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND (EXTRACT(YEAR FROM created_date) = #{year} AND EXTRACT(MONTH FROM created_date) = #{month})
+    </select>
+
+    <select id="getTotalRejectedAndAccepted" resultType="int">
+        SELECT count(*) FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM created_date) = #{year} AND EXTRACT(MONTH FROM created_date) = #{month})
+    </select>
+
+    <select id="getTotalQuantityOrder" resultType="int">
+        SELECT sum(qty) AS totalQuantityOrder
+        FROM tb_order_detail TOD
+                 INNER JOIN tb_order T ON T.id = TOD.order_id
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM created_date) = #{year} AND EXTRACT(MONTH FROM created_date) = #{month})
+    </select>
+
+    <select id="getCategoryNameOrder" resultType="String">
+        SELECT DISTINCT TC.name
+        FROM tb_order_detail
+                 INNER JOIN tb_order T ON T.id = tb_order_detail.order_id
+                 INNER JOIN tb_store_product_detail SPD ON SPD.id = tb_order_detail.store_product_id
+                 INNER JOIN tb_category TC ON TC.id = SPD.category_id
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM T.created_date) = #{year} AND EXTRACT(MONTH FROM T.created_date) = #{month})
+        ORDER BY TC.name DESC
+    </select>
+
+    <select id="getPurchasedShopOrdered" resultType="int">
+        SELECT DISTINCT store_id FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM created_date) = #{year} AND EXTRACT(MONTH FROM created_date) = #{month})
+    </select>
+
+    <select id="getTotalExpense" resultType="int">
+        SELECT sum(qty * unit_price)
+        FROM tb_order_detail
+                 INNER JOIN tb_order T ON T.id = tb_order_detail.order_id
+        WHERE T.retailer_account_id = #{currentUserId}
+          AND (EXTRACT(MONTH FROM created_date) = #{month} AND EXTRACT(YEAR FROM created_date) = #{year})
+    </select>
+
+    <select id="getTotalRatingStore" resultType="int">
+        SELECT count(*) FROM tb_rating_detail
+        WHERE retailer_account_id = #{currentUserId}
+          AND (EXTRACT(YEAR FROM created_date) = #{year} AND EXTRACT(MONTH FROM created_date) = #{month})
+    </select>
+
+    <select id="getTotalQtyInEachCategory" resultType="int">
+        SELECT sum(tb_order_detail.qty)
+        FROM tb_order_detail
+                 INNER JOIN tb_order T ON T.id = tb_order_detail.order_id
+                 INNER JOIN tb_store_product_detail SPD ON SPD.id = tb_order_detail.store_product_id
+                 INNER JOIN tb_category TC ON TC.id = SPD.category_id
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM T.created_date) = #{year} AND EXTRACT(MONTH FROM T.created_date) = #{month})
+        GROUP BY TC.name
+        ORDER BY TC.name DESC
+    </select>
+
+    <select id="getCategoryNameAndTotalItem" resultMap="CategoryQtyResultMap">
+        SELECT sum(tb_order_detail.qty) AS totalItem,
+               TC.name                 AS categoryName
+        FROM tb_order_detail
+                 INNER JOIN tb_order T ON T.id = tb_order_detail.order_id
+                 INNER JOIN tb_store_product_detail SPD ON SPD.id = tb_order_detail.store_product_id
+                 INNER JOIN tb_category TC ON TC.id = SPD.category_id
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM T.created_date) = #{year} AND EXTRACT(MONTH FROM T.created_date) = #{month})
+        GROUP BY TC.name
+        ORDER BY TC.name DESC
+    </select>
+
+    <!-- ─── DIFFERENT YEAR STATS ─────────────────────────────────────────────── -->
+
+    <select id="getTotalOrderFromDifferentYear" resultType="int">
+        SELECT count(*) FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND (EXTRACT(YEAR FROM created_date) = #{year} AND EXTRACT(MONTH FROM created_date) = #{month})
+    </select>
+
+    <select id="getTotalAcceptedAndRejectedFromDifferentYear" resultType="int">
+        SELECT count(*) FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM created_date) = #{year} AND EXTRACT(MONTH FROM created_date) = #{month})
+    </select>
+
+    <select id="getTotalQuantityInDifferenceYear" resultType="int">
+        SELECT coalesce(sum(qty))
+        FROM tb_order_detail tod
+                 INNER JOIN tb_order t ON t.id = tod.order_id
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM t.created_date) = #{year} AND EXTRACT(MONTH FROM t.created_date) = #{month})
+    </select>
+
+    <select id="getCategoryNameOrderIndDifferentYear" resultType="String">
+        SELECT DISTINCT TC.name
+        FROM tb_order_detail
+                 INNER JOIN tb_order T ON T.id = tb_order_detail.order_id
+                 INNER JOIN tb_store_product_detail SPD ON SPD.id = tb_order_detail.store_product_id
+                 INNER JOIN tb_category TC ON TC.id = SPD.category_id
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND EXTRACT(YEAR FROM TC.created_date) = #{year}
+          AND EXTRACT(MONTH FROM TC.created_date) = #{month}
+        ORDER BY TC.name DESC
+    </select>
+
+    <select id="getTotalPurchasedShopDifferent" resultType="int">
+        SELECT DISTINCT store_id FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM created_date) = #{year} AND EXTRACT(MONTH FROM created_date) = #{month})
+    </select>
+
+    <select id="getTotalExpenseInDifferentYear" resultType="int">
+        SELECT coalesce(sum(qty * unit_price))
+        FROM tb_order_detail
+                 INNER JOIN tb_order T ON T.id = tb_order_detail.order_id
+        WHERE T.retailer_account_id = #{currentUserId}
+          AND T.status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM T.created_date) = #{year} AND EXTRACT(MONTH FROM T.created_date) = #{month})
+    </select>
+
+    <select id="getRatingInDifferentYear" resultType="int">
+        SELECT count(*) FROM tb_rating_detail
+        WHERE retailer_account_id = #{currentUserId}
+          AND (EXTRACT(YEAR FROM created_date) = #{year} AND EXTRACT(MONTH FROM created_date) = #{month})
+    </select>
+
+    <!-- ─── YEARLY STATS ─────────────────────────────────────────────────────── -->
+
+    <select id="getTotalYearlyExpense" resultType="double">
+        SELECT coalesce(sum(qty * unit_price))
+        FROM tb_order_detail
+                 INNER JOIN tb_order T ON T.id = tb_order_detail.order_id
+        WHERE T.retailer_account_id = #{currentUserId}
+          AND T.status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM T.created_date) = #{year})
+    </select>
+
+    <select id="getTotalYearlyInDifferentYear" resultType="double">
+        SELECT sum(qty * unit_price)
+        FROM tb_order_detail
+                 INNER JOIN tb_order T ON T.id = tb_order_detail.order_id
+        WHERE T.retailer_account_id = #{currentUserId}
+          AND T.status_id = #{statusId}
+          AND (EXTRACT(YEAR FROM T.created_date) = #{year})
+    </select>
+
+</mapper>

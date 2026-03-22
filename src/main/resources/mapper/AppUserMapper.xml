@@ -1,0 +1,258 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+    WHAT IS THIS FILE?
+    ══════════════════
+    This is the XML Mapper for AppUserRepository.
+    It contains all the SQL queries that were previously written as @Select annotations in Java.
+
+    HOW MYBATIS CONNECTS THIS FILE TO AppUserRepository.java:
+    ══════════════════════════════════════════════════════════
+    namespace="com.henheang.hphsar.repository.AppUserRepository"
+        └── This MUST match the full package + class name of the Java interface exactly.
+            MyBatis uses this to know: "this XML belongs to AppUserRepository"
+
+    Each SQL block has an id="..." that matches the method name in the Java interface:
+        Java method:  AppUser findDistributorUserByEmail(String email)
+        XML block:    <select id="findDistributorUserByEmail" ...>
+
+    HOW PARAMETERS WORK:
+    ══════════════════════
+    #{email}        → MyBatis replaces this with the actual value of the `email` parameter
+    #{user.email}   → When @Param("user") is used, access nested fields with dot notation
+    #{newPassword}  → When @Param("newPassword") is used on a method parameter
+
+    HOW RESULT MAPPING WORKS:
+    ══════════════════════════
+    Before: We used @Result(property="isVerified", column="is_verified") on every method
+    After:  We define ONE <resultMap> here and reuse it everywhere with resultMap="AppUserResultMap"
+
+    column   = the actual column name in the database table
+    property = the field name in the Java AppUser class
+-->
+
+<mapper namespace="com.henheang.hphsar.repository.AppUserRepository">
+
+    <!--
+        RESULT MAP — AppUser
+        ════════════════════
+        Defines how database column names map to Java class field names.
+        The database uses snake_case (is_verified) but Java uses camelCase (isVerified).
+
+        <id>     → maps the PRIMARY KEY column (special tag for performance optimization)
+        <result> → maps every other column
+
+        This resultMap is written ONCE and reused by all SELECT queries below.
+        Without this, we would need @Result annotations on every single method.
+    -->
+    <resultMap id="AppUserResultMap" type="com.henheang.hphsar.model.appUser.AppUser">
+        <id     property="id"         column="id"/>
+        <result property="email"      column="email"/>
+        <result property="password"   column="password"/>
+        <result property="role"       column="role"/>
+        <result property="roleId"     column="role_id"/>
+        <result property="isVerified" column="is_verified"/>
+        <result property="isActive"   column="is_active"/>
+    </resultMap>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         INSERT QUERIES
+         ═══════════════════════════════════════════════════════════════════════
+         <insert> tag is for INSERT SQL operations.
+
+         parameterType  → tells MyBatis the Java type of the input parameter
+         RETURNING *    → PostgreSQL feature: returns the inserted row as a result
+                          This is why we use resultMap here (we get back an AppUser)
+
+         #{user.roleId}  → accesses the roleId field of the AppUserRequest object
+                           "user" comes from @Param("user") in the Java method
+         DEFAULT         → tells PostgreSQL to use the default value for that column
+                           (usually auto-increment id, timestamps, boolean defaults)
+    -->
+
+    <!-- Insert a new DISTRIBUTOR account into tb_distributor_account -->
+    <select id="insertDistributorUser" resultMap="AppUserResultMap">
+        INSERT INTO tb_distributor_account
+        VALUES (DEFAULT, #{user.roleId}, #{user.email}, #{user.password}, DEFAULT, DEFAULT, DEFAULT, DEFAULT)
+        RETURNING id, email, password,
+                  (SELECT name FROM tb_role WHERE id = role_id) AS role,
+                  role_id, is_verified, is_active
+    </select>
+
+    <!-- Insert a new RETAILER account into tb_retailer_account -->
+    <select id="insertRetailerUser" resultMap="AppUserResultMap">
+        INSERT INTO tb_retailer_account
+        VALUES (DEFAULT, #{user.roleId}, #{user.email}, #{user.password}, DEFAULT, DEFAULT, DEFAULT, DEFAULT)
+        RETURNING id, email, password,
+                  (SELECT name FROM tb_role WHERE id = role_id) AS role,
+                  role_id, is_verified, is_active
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         SELECT QUERIES
+         ═══════════════════════════════════════════════════════════════════════
+         <select> tag is for SELECT SQL operations.
+
+         resultMap="AppUserResultMap" → use the mapping we defined above
+                                        MyBatis will automatically fill each
+                                        field with AppUser from the query result
+
+         #{email} → MyBatis replaces this with the actual email value passed in
+                    It also uses PreparedStatement internally — safe from SQL injection
+    -->
+
+    <!-- Find a distributor user by their email address -->
+    <!-- JOIN tb_role → to get the role name (DISTRIBUTOR/RETAILER) as a string -->
+    <select id="findDistributorUserByEmail" resultMap="AppUserResultMap">
+        SELECT  ta.id,
+                ta.email,
+                ta.password,
+                tr.name     AS role,
+                ta.role_id,
+                ta.is_verified,
+                ta.is_active
+        FROM    tb_distributor_account ta
+        JOIN    tb_role tr ON ta.role_id = tr.id
+        WHERE   ta.email = #{email}
+    </select>
+
+    <!-- Find a distributor user by their numeric ID -->
+    <select id="findDistributorUserById" resultMap="AppUserResultMap">
+        SELECT  ta.id,
+                ta.email,
+                ta.password,
+                tr.name     AS role,
+                ta.role_id,
+                ta.is_verified,
+                ta.is_active
+        FROM    tb_distributor_account ta
+        JOIN    tb_role tr ON ta.role_id = tr.id
+        WHERE   ta.id = #{id}
+    </select>
+
+    <!-- Find a retailer user by their email address -->
+    <select id="findRetailerUserByEmail" resultMap="AppUserResultMap">
+        SELECT  ta.id,
+                ta.email,
+                ta.password,
+                tr.name     AS role,
+                ta.role_id,
+                ta.is_verified,
+                ta.is_active
+        FROM    tb_retailer_account ta
+        JOIN    tb_role tr ON ta.role_id = tr.id
+        WHERE   ta.email = #{email}
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         PHONE NUMBER DUPLICATE CHECK QUERIES
+         ═══════════════════════════════════════════════════════════════════════
+         EXISTS(...) → returns TRUE if at least one row matches, FALSE if none
+         resultType="boolean" → the result is a simple true/false value,
+                                not a full object, so we use resultType not resultMap
+    -->
+
+    <select id="checkPhoneNumberFromDistributorPhone" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM tb_distributor_phone WHERE phone_number = #{phone})
+    </select>
+
+    <select id="checkPhoneNumberFromDistributorDetail" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM tb_distributor_info WHERE primary_phone_number = #{phone})
+    </select>
+
+    <select id="checkPhoneNumberFromRetailerPhone" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM tb_retailer_phone WHERE phone_number = #{phone})
+    </select>
+
+    <select id="checkPhoneNumberFromRetailerDetail" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM tb_retailer_info WHERE primary_phone_number = #{phone})
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         SIMPLE SINGLE-VALUE SELECT QUERIES
+         ═══════════════════════════════════════════════════════════════════════
+         resultType="int"     → returns a single Integer value
+         resultType="boolean" → returns a single Boolean value
+
+         Use resultType (not resultMap) when the result is a single primitive
+         value, not a full Java object.
+    -->
+
+    <!-- Get role ID number (1=DISTRIBUTOR, 2=RETAILER) by email -->
+    <select id="getRoleIdByMail" resultType="int">
+        SELECT role_id FROM tb_distributor_account WHERE email = #{email}
+    </select>
+
+    <select id="getRoleIdByMailRetailer" resultType="int">
+        SELECT role_id FROM tb_retailer_account WHERE email = #{email}
+    </select>
+
+    <!-- Check if the email has been OTP-verified (is_verified column) -->
+    <select id="getVerifyDistributorEmail" resultType="boolean">
+        SELECT is_verified FROM tb_distributor_account WHERE email = #{email}
+    </select>
+
+    <select id="getVerifyRetailerEmail" resultType="boolean">
+        SELECT is_verified FROM tb_retailer_account WHERE email = #{email}
+    </select>
+
+    <!-- Get the numeric user ID by email -->
+    <select id="getUserIdByMailDistributor" resultType="int">
+        SELECT id FROM tb_distributor_account WHERE email = #{email}
+    </select>
+
+    <select id="getUserIdByMailRetailer" resultType="int">
+        SELECT id FROM tb_retailer_account WHERE email = #{email}
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         UPDATE QUERIES
+         ═══════════════════════════════════════════════════════════════════════
+         <update> tag is for UPDATE SQL operations.
+
+         RETURNING * (PostgreSQL only) → after updating, return the full row
+                                         This is why resultMap is still used here.
+
+         #{email}       → from JwtChangePasswordRequest.getEmail()
+         #{newPassword} → from JwtChangePasswordRequest.getNewPassword()
+         MyBatis automatically maps object fields using the property name.
+    -->
+
+    <!-- Change password for distributor — returns updated AppUser object -->
+    <select id="updateDistributorUser" resultMap="AppUserResultMap">
+        UPDATE  tb_distributor_account
+        SET     password = #{newPassword}
+        WHERE   email    = #{email}
+        RETURNING *
+    </select>
+
+    <!-- Change password for retailer — returns updated AppUser object -->
+    <select id="updateRetailerUser" resultMap="AppUserResultMap">
+        UPDATE  tb_retailer_account
+        SET     password = #{newPassword}
+        WHERE   email    = #{email}
+        RETURNING *
+    </select>
+
+    <!--
+        Forget password updates — returns only the password column (not full object)
+        resultType="String" → just returns the single password string value
+        Used to confirm the update was successful (non-null = success)
+    -->
+    <select id="updateForgetDistributorUser" resultType="String">
+        UPDATE  tb_distributor_account
+        SET     password = #{newPassword}
+        WHERE   email    = #{email}
+        RETURNING password
+    </select>
+
+    <select id="updateForgetRetailerUser" resultType="String">
+        UPDATE  tb_retailer_account
+        SET     password = #{newPassword}
+        WHERE   email    = #{email}
+        RETURNING password
+    </select>
+
+</mapper>

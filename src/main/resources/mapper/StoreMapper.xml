@@ -1,0 +1,835 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+    WHAT IS THIS FILE?
+    ══════════════════
+    XML Mapper for StoreRepository.
+    Handles all store-level operations including: create, update, search, bookmark, rating.
+
+    Key result maps:
+    - StoreResultMap        → for Store objects (distributor's own store view)
+    - StoreRetailerResultMap → for StoreRetailer objects (retailer's store listing view, includes categories)
+    - StoreRatingResultMap   → for store rating entries
+
+    Both Store and StoreRetailer load rating, ratingCount, and additionalPhone via nested sub-selects.
+    StoreRetailer also loads categories.
+-->
+
+<mapper namespace="com.henheang.hphsar.repository.StoreRepository">
+
+    <!--
+        RESULT MAP — Category (used in StoreRetailerResultMap)
+        ════════════════════════════════════════════════════════
+    -->
+    <resultMap id="CategoryResultMap" type="com.henheang.hphsar.model.category.Category">
+        <id     property="id"          column="id"/>
+        <result property="name"        column="name"/>
+        <result property="createdDate" column="createdDate"/>
+        <result property="updatedDate" column="updatedDate"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — Product (with nested Category)
+        ════════════════════════════════════════════
+        Used for product listing queries that need to populate the category field.
+        <association> calls getCategoryByCategoryId to load the full Category object.
+    -->
+    <resultMap id="ProductWithCategoryResultMap" type="com.henheang.hphsar.model.product.Product">
+        <id     property="id"          column="id"/>
+        <result property="name"        column="name"/>
+        <result property="qty"         column="qty"/>
+        <result property="price"       column="price"/>
+        <result property="image"       column="image"/>
+        <result property="description" column="description"/>
+        <result property="isPublish"   column="isPublish"/>
+        <result property="createdDate" column="createdDate"/>
+        <result property="updatedDate" column="updatedDate"/>
+        <association property="category" column="category_id" select="getCategoryByCategoryId"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — StoreRating
+        ══════════════════════════
+    -->
+    <resultMap id="StoreRatingResultMap" type="com.henheang.hphsar.model.rating.StoreRating">
+        <id     property="id"          column="id"/>
+        <result property="storeId"     column="storeId"/>
+        <result property="retailerId"  column="retailerId"/>
+        <result property="ratedStar"   column="ratedStar"/>
+        <result property="createdDate" column="createdDate"/>
+        <result property="updatedDate" column="updatedDate"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — Store (distributor view: own store)
+        ══════════════════════════════════════════════════
+        Loads rating, ratingCount via @One sub-selects.
+        Loads additionalPhone via @Many sub-select.
+    -->
+    <resultMap id="StoreResultMap" type="com.henheang.hphsar.model.store.Store">
+        <id     property="id"                   column="id"/>
+        <result property="name"                 column="name"/>
+        <result property="address"              column="address"/>
+        <result property="bannerImage"          column="bannerImage"/>
+        <result property="distributorAccountId" column="distributorAccountId"/>
+        <result property="description"          column="description"/>
+        <result property="primaryPhone"         column="primaryPhone"/>
+        <result property="createdDate"          column="createdDate"/>
+        <result property="updatedDate"          column="updatedDate"/>
+        <result property="isPublish"            column="isPublish"/>
+        <result property="isActive"             column="isActive"/>
+        <association property="rating"       column="id" select="getRating"/>
+        <association property="ratingCount"  column="id" select="getRatingCount"/>
+        <collection  property="additionalPhone" column="id" select="getAdditionalPhone"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — StoreRetailer (retailer view: store listing with categories)
+        ══════════════════════════════════════════════════════════════════════════
+        Same as StoreResultMap but also loads categories via @Many sub-select.
+    -->
+    <resultMap id="StoreRetailerResultMap" type="com.henheang.hphsar.model.store.StoreRetailer">
+        <id     property="id"                   column="id"/>
+        <result property="name"                 column="name"/>
+        <result property="address"              column="address"/>
+        <result property="bannerImage"          column="bannerImage"/>
+        <result property="distributorAccountId" column="distributorAccountId"/>
+        <result property="description"          column="description"/>
+        <result property="primaryPhone"         column="primaryPhone"/>
+        <result property="createdDate"          column="createdDate"/>
+        <result property="updatedDate"          column="updatedDate"/>
+        <result property="isPublish"            column="isPublish"/>
+        <result property="isActive"             column="isActive"/>
+        <association property="rating"       column="id" select="getRating"/>
+        <association property="ratingCount"  column="id" select="getRatingCount"/>
+        <collection  property="additionalPhone" column="id" select="getAdditionalPhone"/>
+        <collection  property="categories"      column="id" select="getCategoryListingByStoreId"/>
+    </resultMap>
+
+    <!-- ─── HELPER: sub-selects called by the resultMaps above ──────────────── -->
+
+    <select id="getRating" resultType="double">
+        SELECT COALESCE(AVG(rated_star), 0) FROM tb_rating_detail WHERE store_id = #{id}
+    </select>
+
+    <select id="getRatingCount" resultType="int">
+        SELECT COALESCE(COUNT(rated_star), 0) FROM tb_rating_detail WHERE store_id = #{storeId}
+    </select>
+
+    <select id="getAdditionalPhone" resultType="String">
+        SELECT phone FROM tb_store_phone WHERE store_id = #{storeId}
+    </select>
+
+    <select id="getCategoryListingByStoreId" resultMap="CategoryResultMap">
+        SELECT DISTINCT A.id, A.name, A.updated_date AS updatedDate, A.created_date AS createdDate
+        FROM tb_category A
+                 INNER JOIN tb_store_product_detail B ON A.id = B.category_id
+        WHERE store_id = #{storeId}
+    </select>
+
+    <select id="getCategoryByCategoryId" resultMap="CategoryResultMap">
+        SELECT id, name, created_date AS createdDate, updated_date AS updatedDate FROM tb_category WHERE id = #{id}
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         CREATE STORE
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <select id="createNewStore" resultMap="StoreResultMap">
+        INSERT INTO tb_store (id, distributor_account_id, name, description, created_date, updated_date, is_publish, is_active, banner_image, address, phone)
+        VALUES (DEFAULT, #{currentUserId}, #{store.name}, #{store.description}, DEFAULT, DEFAULT, true, DEFAULT, #{store.bannerImage}, #{store.address}, #{store.primaryPhone})
+        RETURNING id,
+                  name,
+                  address,
+                  banner_image                   AS bannerImage,
+                  distributor_account_id         AS distributorAccountId,
+                  description,
+                  created_date                   AS createdDate,
+                  updated_date                   AS updatedDate,
+                  is_publish                     AS isPublish,
+                  is_active                      AS isActive
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         GET STORE
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <select id="getUserStore" resultMap="StoreResultMap">
+        SELECT id,
+               name,
+               address,
+               banner_image           AS bannerImage,
+               distributor_account_id AS distributorAccountId,
+               description,
+               phone                  AS primaryPhone,
+               created_date           AS createdDate,
+               updated_date           AS updatedDate,
+               is_publish             AS isPublish,
+               is_active              AS isActive
+        FROM tb_store
+        WHERE distributor_account_id = #{currentUserId}
+    </select>
+
+    <select id="getAllStore" resultMap="StoreRetailerResultMap">
+        SELECT id,
+               name,
+               address,
+               banner_image           AS bannerImage,
+               distributor_account_id AS distributorAccountId,
+               description,
+               created_date           AS createdDate,
+               updated_date           AS updatedDate,
+               is_publish             AS isPublish,
+               is_active              AS isActive,
+               phone                  AS primaryPhone
+        FROM tb_store
+        WHERE is_publish = true
+    </select>
+
+    <select id="getStoreById" resultMap="StoreRetailerResultMap">
+        SELECT id,
+               name,
+               address,
+               banner_image           AS bannerImage,
+               distributor_account_id AS distributorAccountId,
+               description,
+               phone                  AS primaryPhone,
+               created_date           AS createdDate,
+               updated_date           AS updatedDate,
+               is_publish             AS isPublish,
+               is_active              AS isActive
+        FROM tb_store
+        WHERE id = #{id}
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         UPDATE STORE
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <select id="editAllFieldUserStore" resultMap="StoreResultMap">
+        UPDATE tb_store
+        SET name         = #{store.name},
+            description  = #{store.description},
+            updated_date = NOW(),
+            is_publish   = #{store.isPublish},
+            banner_image = #{store.bannerImage},
+            address      = #{store.address},
+            phone        = #{store.primaryPhone}
+        WHERE id = #{storeId}
+        RETURNING id,
+                  name,
+                  address,
+                  banner_image           AS bannerImage,
+                  distributor_account_id AS distributorAccountId,
+                  description,
+                  phone                  AS primaryPhone,
+                  created_date           AS createdDate,
+                  updated_date           AS updatedDate,
+                  is_publish             AS isPublish,
+                  is_active              AS isActive
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         DELETE / DISABLE / ENABLE STORE
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <select id="deleteUserStore" resultType="String">
+        DELETE FROM tb_store WHERE distributor_account_id = #{currentUserId} RETURNING 1
+    </select>
+
+    <select id="disableStore" resultType="String">
+        UPDATE tb_store SET is_publish = false, updated_date = now()
+        WHERE distributor_account_id = #{currentUserId} RETURNING 1
+    </select>
+
+    <select id="enableStore" resultType="String">
+        UPDATE tb_store SET is_publish = true, updated_date = now()
+        WHERE distributor_account_id = #{currentUserId} RETURNING 1
+    </select>
+
+    <!-- ─── ADDITIONAL PHONE MANAGEMENT ──────────────────────────────────────── -->
+
+    <insert id="addAdditionalPhone">
+        INSERT INTO tb_store_phone VALUES (DEFAULT, #{id}, #{phone})
+    </insert>
+
+    <delete id="deleteAdditionalPhone">
+        DELETE FROM tb_store_phone WHERE store_id = #{storeId}
+    </delete>
+
+    <!-- ─── BOOKMARK OPERATIONS ───────────────────────────────────────────────── -->
+
+    <select id="getBookmarkStoreId" resultType="int">
+        SELECT store_id FROM tb_bookmark WHERE retailer_account_id = #{currentUserId}
+    </select>
+
+    <select id="bookmarkStoreById" resultType="String">
+        INSERT INTO tb_bookmark VALUES (DEFAULT, #{storeId}, #{currentUser}) RETURNING 1
+    </select>
+
+    <select id="removeBookmarkStoreById" resultType="String">
+        DELETE FROM tb_bookmark WHERE store_id = #{storeId} AND retailer_account_id = #{currentUser} RETURNING 1
+    </select>
+
+    <select id="checkAlreadyBookmarked" resultType="boolean">
+        SELECT EXISTS(SELECT * FROM tb_bookmark WHERE store_id = #{storeId} AND retailer_account_id = #{currentUserId})
+    </select>
+
+    <select id="getTotalBookmarkedStores" resultType="int">
+        SELECT count(DISTINCT store_id) FROM tb_bookmark WHERE retailer_account_id = #{retailerId}
+    </select>
+
+    <!-- ─── RATING OPERATIONS ─────────────────────────────────────────────────── -->
+
+    <select id="checkAlreadyRated" resultType="boolean">
+        SELECT EXISTS(SELECT * FROM tb_rating_detail WHERE store_id = #{storeId} AND retailer_account_id = #{currentUserId})
+    </select>
+
+    <select id="ratingStoreById" resultMap="StoreRatingResultMap">
+        INSERT INTO tb_rating_detail
+        VALUES (DEFAULT, #{storeId}, #{currentUser}, #{request.ratedStar}, DEFAULT, DEFAULT)
+        RETURNING id,
+                  store_id            AS storeId,
+                  retailer_account_id AS retailerId,
+                  rated_star          AS ratedStar,
+                  created_date        AS createdDate,
+                  updated_date        AS updatedDate
+    </select>
+
+    <select id="getRatingByStoreId" resultMap="StoreRatingResultMap">
+        SELECT id,
+               store_id            AS storeId,
+               retailer_account_id AS retailerId,
+               rated_star          AS ratedStar,
+               created_date        AS createdDate,
+               updated_date        AS updatedDate
+        FROM tb_rating_detail
+        WHERE store_id = #{storeId} AND retailer_account_id = #{currentUser}
+    </select>
+
+    <select id="editRatingByStoreId" resultMap="StoreRatingResultMap">
+        UPDATE tb_rating_detail
+        SET rated_star = #{request.ratedStar}, updated_date = now()
+        WHERE store_id = #{storeId} AND retailer_account_id = #{currentUser}
+        RETURNING id,
+                  store_id            AS storeId,
+                  retailer_account_id AS retailerId,
+                  rated_star          AS ratedStar,
+                  created_date        AS createdDate,
+                  updated_date        AS updatedDate
+    </select>
+
+    <select id="deleteRatingByStoreId" resultType="String">
+        DELETE FROM tb_rating_detail
+        WHERE store_id = #{storeId} AND retailer_account_id = #{currentUser}
+        RETURNING 1
+    </select>
+
+    <select id="getTotalRatedStores" resultType="int">
+        SELECT count(*) FROM tb_store
+                                JOIN tb_rating_detail trd ON tb_store.id = trd.store_id
+        WHERE is_publish = true AND retailer_account_id = #{retailerId}
+    </select>
+
+    <!-- ─── PRODUCT LISTING FOR STORE ────────────────────────────────────────── -->
+    <!--
+        ${by} → ORDER BY column name (direct string substitution, validated in service).
+    -->
+
+    <select id="getProductListingByStoreIdASC" resultMap="ProductWithCategoryResultMap">
+        SELECT td.id           AS id,
+               tp.name,
+               td.qty,
+               td.price,
+               td.image,
+               td.description,
+               td.category_id,
+               td.is_publish   AS isPublish,
+               td.created_date AS createdDate,
+               td.updated_date AS updatedDate
+        FROM tb_store_product_detail td
+                 INNER JOIN tb_product tp ON td.product_id = tp.id
+        WHERE td.store_id = #{storeId} AND td.is_publish = true
+        ORDER BY ${by} ASC
+    </select>
+
+    <select id="getProductListingByStoreIdDESC" resultMap="ProductWithCategoryResultMap">
+        SELECT td.id           AS id,
+               tp.name,
+               td.qty,
+               td.price,
+               td.image,
+               td.description,
+               td.category_id,
+               td.is_publish   AS isPublish,
+               td.created_date AS createdDate,
+               td.updated_date AS updatedDate
+        FROM tb_store_product_detail td
+                 INNER JOIN tb_product tp ON td.product_id = tp.id
+        WHERE td.store_id = #{storeId} AND td.is_publish = true
+        ORDER BY ${by} DESC
+    </select>
+
+    <select id="getProductListingByStoreIdAndCategoryId" resultMap="ProductWithCategoryResultMap">
+        SELECT td.id           AS id,
+               tp.name,
+               td.qty,
+               td.price,
+               td.image,
+               td.description,
+               td.category_id,
+               td.is_publish   AS isPublish,
+               td.created_date AS createdDate,
+               td.updated_date AS updatedDate
+        FROM tb_store_product_detail td
+                 INNER JOIN tb_product tp ON td.product_id = tp.id
+        WHERE td.store_id = #{storeId} AND td.is_publish = true AND td.category_id = #{categoryId}
+    </select>
+
+    <!-- ─── STORE LISTING (paginated, sorted) ────────────────────────────────── -->
+
+    <select id="getAllUserStoreSortByDateASC" resultMap="StoreRetailerResultMap">
+        SELECT id,
+               name,
+               address,
+               banner_image           AS bannerImage,
+               distributor_account_id AS distributorAccountId,
+               description,
+               phone                  AS primaryPhone,
+               created_date           AS createdDate,
+               updated_date           AS updatedDate,
+               is_publish             AS isPublish,
+               is_active              AS isActive
+        FROM tb_store WHERE is_publish = true
+        ORDER BY created_date ASC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getAllUserStoreSortByDateDESC" resultMap="StoreRetailerResultMap">
+        SELECT id,
+               name,
+               address,
+               banner_image           AS bannerImage,
+               distributor_account_id AS distributorAccountId,
+               description,
+               created_date           AS createdDate,
+               updated_date           AS updatedDate,
+               is_publish             AS isPublish,
+               is_active              AS isActive,
+               phone                  AS primaryPhone
+        FROM tb_store WHERE is_publish = true
+        ORDER BY created_date DESC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getTotalStores" resultType="int">
+        SELECT count(*) FROM tb_store WHERE is_publish = true
+    </select>
+
+    <select id="getAllUserStoreSortByCurrentUserFavoriteDESC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               tb_store.created_date          AS createdDate,
+               tb_store.updated_date          AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+                 FULL OUTER JOIN tb_bookmark tb ON tb_store.id = tb.store_id
+        WHERE is_publish = TRUE
+        ORDER BY (SELECT EXISTS(SELECT * FROM tb_bookmark WHERE tb.retailer_account_id = #{currentUser})) DESC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getAllBookmarkedStore" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               tb_store.created_date          AS createdDate,
+               tb_store.updated_date          AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+        WHERE is_publish = TRUE
+          AND tb_store.id IN (SELECT DISTINCT store_id FROM tb_bookmark WHERE retailer_account_id = #{currentUser})
+        ORDER BY created_date ASC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="searchStoreByName" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               tb_store.created_date          AS createdDate,
+               tb_store.updated_date          AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+                 FULL OUTER JOIN tb_bookmark tb ON tb_store.id = tb.store_id
+        WHERE is_publish = TRUE AND name ILIKE '%${name}%'
+        ORDER BY (SELECT count(rated_star) FROM tb_rating_detail) DESC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getAllUserStoreSortByRatedStarASC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                                                             AS id,
+               name,
+               address,
+               banner_image                                                           AS bannerImage,
+               tb_store.distributor_account_id                                        AS distributorAccountId,
+               description,
+               phone                                                                  AS primaryPhone,
+               tb_store.created_date                                                  AS createdDate,
+               tb_store.updated_date                                                  AS updatedDate,
+               is_publish                                                             AS isPublish,
+               is_active                                                              AS isActive,
+               (SELECT coalesce(avg(rated_star), 0) FROM tb_rating_detail WHERE store_id = tb_store.id) AS rating
+        FROM tb_store FULL OUTER JOIN tb_bookmark tb ON tb_store.id = tb.store_id
+        WHERE is_publish = TRUE
+        GROUP BY tb_store.id
+        ORDER BY rating ASC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getAllUserStoreSortByRatedStarDESC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                                                             AS id,
+               name,
+               address,
+               banner_image                                                           AS bannerImage,
+               tb_store.distributor_account_id                                        AS distributorAccountId,
+               description,
+               phone                                                                  AS primaryPhone,
+               tb_store.created_date                                                  AS createdDate,
+               tb_store.updated_date                                                  AS updatedDate,
+               is_publish                                                             AS isPublish,
+               is_active                                                              AS isActive,
+               (SELECT coalesce(avg(rated_star), 0) FROM tb_rating_detail WHERE store_id = tb_store.id) AS rating
+        FROM tb_store FULL OUTER JOIN tb_bookmark tb ON tb_store.id = tb.store_id
+        WHERE is_publish = TRUE
+        GROUP BY tb_store.id
+        ORDER BY rating DESC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getAllUserStoreSortByNameASC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               tb_store.created_date          AS createdDate,
+               tb_store.updated_date          AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store FULL OUTER JOIN tb_bookmark tb ON tb_store.id = tb.store_id
+        WHERE is_publish = TRUE
+        ORDER BY name ASC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getAllUserStoreSortByNameDESC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               tb_store.created_date          AS createdDate,
+               tb_store.updated_date          AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store FULL OUTER JOIN tb_bookmark tb ON tb_store.id = tb.store_id
+        WHERE is_publish = TRUE
+        ORDER BY name DESC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <!-- ─── SEARCH ──────────────────────────────────────────────────────────── -->
+
+    <select id="getStoresByCategorySearchASC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               created_date                   AS createdDate,
+               updated_date                   AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+        WHERE is_publish = TRUE
+          AND id IN (SELECT store_id FROM tb_store_category WHERE category_id IN (SELECT id FROM tb_category WHERE name ILIKE '%${name}%'))
+          AND id IN (SELECT store_id FROM tb_store_category WHERE category_id IN (SELECT DISTINCT category_id FROM tb_store_product_detail WHERE store_id = tb_store.id))
+          AND is_active = true
+        ORDER BY ${by} ASC
+    </select>
+
+    <select id="getStoresByCategorySearchDESC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               created_date                   AS createdDate,
+               updated_date                   AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+        WHERE is_publish = TRUE
+          AND id IN (SELECT store_id FROM tb_store_category WHERE category_id IN (SELECT id FROM tb_category WHERE name ILIKE '%${name}%'))
+          AND id IN (SELECT store_id FROM tb_store_category WHERE category_id IN (SELECT DISTINCT category_id FROM tb_store_product_detail WHERE store_id = tb_store.id))
+        ORDER BY ${by} DESC
+    </select>
+
+    <select id="getStoreIdsByCategorySearchASC" resultType="int">
+        SELECT tb_store.id FROM tb_store
+        WHERE is_publish = TRUE
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT id FROM tb_product WHERE name ILIKE '%${name}%'))
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT DISTINCT product_id FROM tb_store_product_detail WHERE store_id = tb_store.id))
+        ORDER BY ${by} ASC
+    </select>
+
+    <select id="getStoreIdsByCategorySearchDESC" resultType="int">
+        SELECT tb_store.id FROM tb_store
+        WHERE is_publish = TRUE
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT id FROM tb_product WHERE name ILIKE '%${name}%'))
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT DISTINCT product_id FROM tb_store_product_detail WHERE store_id = tb_store.id))
+        ORDER BY ${by} DESC
+    </select>
+
+    <select id="getStoresByProductSearchASC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               created_date                   AS createdDate,
+               updated_date                   AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+        WHERE is_publish = TRUE
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT id FROM tb_product WHERE name ILIKE '%${name}%'))
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT DISTINCT product_id FROM tb_store_product_detail WHERE store_id = tb_store.id))
+        ORDER BY ${by} ASC
+    </select>
+
+    <select id="getStoresByProductSearchDESC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               created_date                   AS createdDate,
+               updated_date                   AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+        WHERE is_publish = TRUE
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT id FROM tb_product WHERE name ILIKE '%${name}%'))
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT DISTINCT product_id FROM tb_store_product_detail WHERE store_id = tb_store.id))
+        ORDER BY ${by} DESC
+    </select>
+
+    <select id="getStoreIdByProductSearchASC" resultType="int">
+        SELECT tb_store.id FROM tb_store
+        WHERE is_publish = TRUE
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT id FROM tb_product WHERE name ILIKE '%${name}%'))
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT DISTINCT product_id FROM tb_store_product_detail WHERE store_id = tb_store.id))
+        ORDER BY ${by} ASC
+    </select>
+
+    <select id="getStoreIdByProductSearchDESC" resultType="int">
+        SELECT tb_store.id FROM tb_store
+        WHERE is_publish = TRUE
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT id FROM tb_product WHERE name ILIKE '%${name}%'))
+          AND id IN (SELECT store_id FROM tb_store_product_detail WHERE product_id IN (SELECT DISTINCT product_id FROM tb_store_product_detail WHERE store_id = tb_store.id))
+        ORDER BY ${by} DESC
+    </select>
+
+    <select id="getStoresByNameSearchASC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               tb_store.created_date          AS createdDate,
+               tb_store.updated_date          AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+        WHERE is_publish = TRUE AND name ILIKE '%${name}%'
+        ORDER BY ${by} ASC
+    </select>
+
+    <select id="getStoresByNameSearchDESC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               tb_store.created_date          AS createdDate,
+               tb_store.updated_date          AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+        WHERE is_publish = TRUE AND name ILIKE '%${name}%'
+        ORDER BY ${by} DESC
+    </select>
+
+    <select id="getStoresIdByNameSearchASC" resultType="int">
+        SELECT tb_store.id FROM tb_store
+        WHERE is_publish = TRUE AND name ILIKE '%${name}%'
+        ORDER BY ${by} ASC
+    </select>
+
+    <select id="getStoresIdByNameSearchDESC" resultType="int">
+        SELECT tb_store.id FROM tb_store
+        WHERE is_publish = TRUE AND name ILIKE '%${name}%'
+        ORDER BY ${by} DESC
+    </select>
+
+    <!-- ─── STORE BY IDS LIST ──────────────────────────────────────────────────
+         ${combinedList} → comma-separated list of IDs passed as a raw string.
+    -->
+
+    <select id="getStoresByStoreIdsASC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               created_date                   AS createdDate,
+               updated_date                   AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+        WHERE id IN (${combinedList})
+        ORDER BY array_position('{${combinedList}}', id) ASC
+    </select>
+
+    <select id="getStoresByStoreIdsDESC" resultMap="StoreRetailerResultMap">
+        SELECT tb_store.id                     AS id,
+               name,
+               address,
+               banner_image                   AS bannerImage,
+               tb_store.distributor_account_id AS distributorAccountId,
+               description,
+               phone                          AS primaryPhone,
+               created_date                   AS createdDate,
+               updated_date                   AS updatedDate,
+               is_publish                     AS isPublish,
+               is_active                      AS isActive
+        FROM tb_store
+        WHERE id IN (${combinedList})
+        ORDER BY array_position('{${combinedList}}', id) DESC
+    </select>
+
+    <!-- ─── SIMPLE LOOKUPS ────────────────────────────────────────────────────── -->
+
+    <select id="getStoreIdByUserId" resultType="int">
+        SELECT id FROM tb_store WHERE distributor_account_id = #{currentUserId}
+    </select>
+
+    <select id="checkStoreIfCreated" resultType="int">
+        SELECT COALESCE((SELECT 1 FROM tb_store WHERE distributor_account_id = #{currentUserId}), 0) AS isExist
+    </select>
+
+    <select id="checkDuplicateStoreName" resultType="boolean">
+        SELECT EXISTS(SELECT name FROM tb_role WHERE name ILIKE #{name})
+    </select>
+
+    <select id="checkIfStoreExist" resultType="boolean">
+        SELECT EXISTS(SELECT * FROM tb_store WHERE id = #{storeId} AND is_publish = true)
+    </select>
+
+    <select id="checkIfStoreIsDisable" resultType="boolean">
+        SELECT is_publish FROM tb_store WHERE distributor_account_id = #{currentUserId}
+    </select>
+
+    <select id="checkIfCategoryExistInStore" resultType="boolean">
+        SELECT EXISTS(SELECT * FROM tb_store_category WHERE store_id = #{storeId} AND category_id = #{categoryId})
+    </select>
+
+    <select id="checkDuplicatePhone" resultType="boolean">
+        SELECT EXISTS(SELECT * FROM tb_store
+                                       INNER JOIN tb_store_phone tsp ON tb_store.id = tsp.store_id
+                      WHERE phone = #{primaryPhone} OR tsp.phone = #{primaryPhone})
+    </select>
+
+    <select id="getStoreImageByStoreId" resultType="String">
+        SELECT banner_image FROM tb_store WHERE id = #{id}
+    </select>
+
+    <select id="getStoreImageById" resultType="String">
+        SELECT banner_image FROM tb_store WHERE id = #{id}
+    </select>
+
+    <select id="getStoreNameById" resultType="String">
+        SELECT name FROM tb_store WHERE id = #{id}
+    </select>
+
+    <select id="getStoreAddressById" resultType="String">
+        SELECT address FROM tb_store WHERE id = #{id}
+    </select>
+
+    <select id="getStorePrimaryPhoneById" resultType="String">
+        SELECT phone FROM tb_store WHERE id = #{id}
+    </select>
+
+    <select id="getStoreEmailByStoreId" resultType="String">
+        SELECT email FROM tb_distributor_account
+        WHERE id = (SELECT distributor_account_id FROM tb_store WHERE id = #{id})
+    </select>
+
+    <select id="getStoreIdByProductId" resultType="int">
+        SELECT store_id FROM tb_store_product_detail WHERE product_id = #{productId}
+    </select>
+
+    <select id="checkStock" resultType="int">
+        SELECT id FROM tb_store_product_detail
+        WHERE store_id IN (SELECT store_id FROM tb_order WHERE id = #{orderId})
+          AND id IN (SELECT store_product_id FROM tb_order_detail WHERE order_id = #{orderId})
+          AND qty = 0
+    </select>
+
+    <select id="getStoreIdByDraftId" resultType="int">
+        SELECT store_id FROM tb_order WHERE status_id = 8 AND id = #{id}
+    </select>
+
+</mapper>

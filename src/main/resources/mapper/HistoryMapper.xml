@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<!--
+    WHAT IS THIS FILE?
+    ══════════════════
+    XML Mapper for HistoryRepository.
+    Handles product import history and order history for both distributors and retailers.
+
+    Key result maps:
+    - ImportHistoryResultMap      → for product import history rows
+    - OrderHistoryResultMap       → for a single order summary (used inside OrderDetailHistory)
+    - RetailerOrderHistoryResultMap → same but uses store name/image instead of retailer name/image
+    - OrderDetailHistoryResultMap → wraps OrderHistory + List<ProductOrder>
+-->
+
+<mapper namespace="com.henheang.hphsar.repository.HistoryRepository">
+
+    <!--
+        RESULT MAP — ImportHistory
+        ═══════════════════════════
+        All columns are already aliased in the query to match Java field names.
+        Auto-mapping handles this, but explicit map is clearer.
+    -->
+    <resultMap id="ImportHistoryResultMap" type="com.henheang.hphsar.model.history.ImportHistory">
+        <id     property="id"       column="id"/>
+        <result property="importId" column="importId"/>
+        <result property="date"     column="date"/>
+        <result property="category" column="category"/>
+        <result property="name"     column="name"/>
+        <result property="qty"      column="qty"/>
+        <result property="price"    column="price"/>
+        <result property="total"    column="total"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — ProductOrder
+        ══════════════════════════
+        Used in OrderDetailHistory as the List<ProductOrder> products field.
+    -->
+    <resultMap id="ProductOrderResultMap" type="com.henheang.hphsar.model.product.ProductOrder">
+        <id     property="productId"   column="productId"/>
+        <result property="productName" column="productName"/>
+        <result property="image"       column="image"/>
+        <result property="inStock"     column="inStock"/>
+        <result property="qty"         column="qty"/>
+        <result property="unitPrice"   column="unitPrice"/>
+        <result property="subTotal"    column="subTotal"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — OrderHistory (for distributor view)
+        ══════════════════════════════════════════════════
+        Distributor sees: retailer name, retailer image, retailer address, order total, status.
+        These are loaded via nested sub-selects (association = @One equivalent).
+    -->
+    <resultMap id="OrderHistoryResultMap" type="com.henheang.hphsar.model.history.OrderHistory">
+        <id     property="id"         column="id"/>
+        <result property="storeId"    column="storeId"/>
+        <result property="retailerId" column="retailerId"/>
+        <result property="date"       column="date"/>
+        <result property="statusId"   column="status_id"/>
+        <association property="name"    column="retailerId"
+                     select="com.henheang.hphsar.repository.RetailerProfileRepository.getRetailerNameById"/>
+        <association property="image"   column="retailerId"
+                     select="com.henheang.hphsar.repository.RetailerProfileRepository.getRetailerImageById"/>
+        <association property="address" column="retailerId"
+                     select="com.henheang.hphsar.repository.RetailerProfileRepository.getRetailerAddressById"/>
+        <association property="total"   column="id"
+                     select="com.henheang.hphsar.repository.OrderDistributorRepository.getTotalOrderAmount"/>
+        <association property="status"  column="status_id"
+                     select="com.henheang.hphsar.repository.OrderDistributorRepository.getStatusByStatusId"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — OrderHistory (for retailer view)
+        ══════════════════════════════════════════════
+        Retailer sees: store name, store image, retailer address, order total, status.
+        Different from distributor view — uses store name/image instead of retailer name/image.
+    -->
+    <resultMap id="RetailerOrderHistoryResultMap" type="com.henheang.hphsar.model.history.OrderHistory">
+        <id     property="id"         column="id"/>
+        <result property="storeId"    column="storeId"/>
+        <result property="retailerId" column="retailerId"/>
+        <result property="date"       column="date"/>
+        <result property="statusId"   column="status_id"/>
+        <association property="name"    column="storeId"
+                     select="com.henheang.hphsar.repository.StoreRepository.getStoreNameById"/>
+        <association property="image"   column="storeId"
+                     select="com.henheang.hphsar.repository.StoreRepository.getStoreImageByStoreId"/>
+        <association property="address" column="retailerId"
+                     select="com.henheang.hphsar.repository.RetailerProfileRepository.getRetailerAddressById"/>
+        <association property="total"   column="id"
+                     select="com.henheang.hphsar.repository.OrderDistributorRepository.getTotalOrderAmount"/>
+        <association property="status"  column="status_id"
+                     select="com.henheang.hphsar.repository.OrderDistributorRepository.getStatusByStatusId"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — OrderDetailHistory (distributor)
+        ═══════════════════════════════════════════════
+        Contains:
+        - order   → OrderHistory object (from getOrderByOrderId sub-select)
+        - products → List<ProductOrder> (from getProductOrderForOrderDetail sub-select)
+
+        <association> for single nested object (order)
+        <collection>  for list of nested objects (products)
+    -->
+    <resultMap id="OrderDetailHistoryResultMap" type="com.henheang.hphsar.model.history.OrderDetailHistory">
+        <id property="id" column="id"/>
+        <association property="order"    column="id" select="getOrderByOrderId"/>
+        <collection  property="products" column="id" select="getProductOrderForOrderDetail"/>
+    </resultMap>
+
+    <!--
+        RESULT MAP — OrderDetailHistory (retailer)
+        ════════════════════════════════════════════
+        Same structure but calls getRetailerOrderByOrderId instead.
+    -->
+    <resultMap id="RetailerOrderDetailHistoryResultMap" type="com.henheang.hphsar.model.history.OrderDetailHistory">
+        <id property="id" column="id"/>
+        <association property="order"    column="id" select="getRetailerOrderByOrderId"/>
+        <collection  property="products" column="id" select="getProductOrderForOrderDetail"/>
+    </resultMap>
+
+    <!-- ─── HELPER: product order line items ─────────────────────────────────── -->
+
+    <select id="getProductOrderForOrderDetail" resultMap="ProductOrderResultMap">
+        SELECT tspd.id                                                  AS productId,
+               (SELECT name FROM tb_product WHERE id = tspd.product_id) AS productName,
+               image,
+               tspd.qty                                                 AS inStock,
+               a.qty                                                    AS qty,
+               a.unit_price                                             AS unitPrice,
+               (a.qty * a.unit_price)                                   AS subTotal
+        FROM tb_order_detail AS a
+                 JOIN tb_store_product_detail tspd ON a.store_product_id = tspd.id
+        WHERE order_id = #{orderId}
+    </select>
+
+    <!-- ─── HELPER: load order summary for distributor ───────────────────────── -->
+
+    <select id="getOrderByOrderId" resultMap="OrderHistoryResultMap">
+        SELECT id,
+               store_id                AS storeId,
+               retailer_account_id    AS retailerId,
+               created_date           AS date,
+               status_id
+        FROM tb_order
+        WHERE id = #{id}
+    </select>
+
+    <!-- ─── HELPER: load order summary for retailer ──────────────────────────── -->
+
+    <select id="getRetailerOrderByOrderId" resultMap="RetailerOrderHistoryResultMap">
+        SELECT id,
+               store_id                AS storeId,
+               retailer_account_id    AS retailerId,
+               created_date           AS date,
+               status_id
+        FROM tb_order
+        WHERE id = #{id}
+    </select>
+
+    <!-- ─── HELPER: simple lookup ────────────────────────────────────────────── -->
+
+    <select id="getCategoryNameById" resultType="String">
+        SELECT name FROM tb_category WHERE id = #{id}
+    </select>
+
+    <select id="getProductNameByid" resultType="String">
+        SELECT name FROM tb_product WHERE id = #{id}
+    </select>
+
+    <select id="getImportDetailQty" resultType="int">
+        SELECT coalesce(qty, 0)
+        FROM tb_product_import_detail
+                 JOIN tb_product_import tpi ON tb_product_import_detail.product_import_id = tpi.id
+        WHERE product_id = #{productId}
+          AND created_date = #{date}
+          AND store_id = #{storeId}
+    </select>
+
+    <select id="getImportDetailPrice" resultType="double">
+        SELECT coalesce(price, 0)
+        FROM tb_product_import_detail
+                 JOIN tb_product_import tpi ON tb_product_import_detail.product_import_id = tpi.id
+        WHERE product_id = #{productId}
+          AND created_date = #{date}
+          AND store_id = #{storeId}
+    </select>
+
+    <select id="getImportDetailTotal" resultType="double">
+        SELECT (qty * price)
+        FROM tb_product_import_detail
+                 JOIN tb_product_import tpi ON tb_product_import_detail.product_import_id = tpi.id
+        WHERE product_id = #{productId}
+          AND created_date = #{date}
+          AND store_id = #{storeId}
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         IMPORT HISTORY (product imports by distributor)
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <select id="getProductImportHistoryASC" resultMap="ImportHistoryResultMap">
+        SELECT tb_product_import_detail.product_id AS id,
+               (SELECT id FROM tb_product_import WHERE id = tb_product_import_detail.product_import_id) AS importId,
+               (SELECT created_date FROM tb_product_import WHERE id = tb_product_import_detail.product_import_id) AS date,
+               (SELECT name FROM tb_category WHERE id = tb_product_import_detail.category_id) AS category,
+               (SELECT name FROM tb_product WHERE id = tb_product_import_detail.product_id) AS name,
+               qty,
+               price,
+               (qty * price) AS total
+        FROM tb_product_import_detail
+                 JOIN tb_product_import tpi ON tpi.id = tb_product_import_detail.product_import_id
+        WHERE store_id = #{storeId}
+        ORDER BY date ASC
+        LIMIT #{pageSize}
+        OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getProductImportHistoryDESC" resultMap="ImportHistoryResultMap">
+        SELECT tb_product_import_detail.product_id AS id,
+               (SELECT id FROM tb_product_import WHERE id = tb_product_import_detail.product_import_id) AS importId,
+               (SELECT created_date FROM tb_product_import WHERE id = tb_product_import_detail.product_import_id) AS date,
+               (SELECT name FROM tb_category WHERE id = (SELECT category_id FROM tb_store_product_detail WHERE id = tb_product_import_detail.product_id)) AS category,
+               (SELECT name FROM tb_product WHERE id = (SELECT product_id FROM tb_store_product_detail WHERE id = tb_product_import_detail.product_id)) AS name,
+               qty,
+               price,
+               (qty * price) AS total
+        FROM tb_product_import_detail
+                 JOIN tb_product_import tpi ON tpi.id = tb_product_import_detail.product_import_id
+        WHERE store_id = #{storeId}
+        ORDER BY date DESC
+        LIMIT #{pageSize}
+        OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="findTotalImportDetail" resultType="int">
+        SELECT count(*) FROM tb_product_import_detail a
+                                JOIN tb_product_import b ON a.product_import_id = b.id
+        WHERE store_id = #{storeId}
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         ORDER HISTORY (distributor view)
+         ═══════════════════════════════════════════════════════════════════════
+         status_id IN (5, 6) → completed or rejected orders
+    -->
+
+    <select id="findTotalOrderHistory" resultType="int">
+        SELECT count(*) FROM tb_order
+                                JOIN tb_order_detail tod ON tb_order.id = tod.order_id
+        WHERE store_id = #{storeId}
+          AND status_id IN (5, 6)
+    </select>
+
+    <select id="getOrderHistoryASC" resultMap="OrderDetailHistoryResultMap">
+        SELECT id,
+               store_id             AS storeId,
+               retailer_account_id AS retailerId,
+               created_date        AS date,
+               status_id
+        FROM tb_order
+        WHERE store_id = #{storeId}
+          AND status_id IN (5, 6)
+        ORDER BY date ASC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getOrderHistoryDESC" resultMap="OrderDetailHistoryResultMap">
+        SELECT id,
+               store_id             AS storeId,
+               retailer_account_id AS retailerId,
+               created_date        AS date,
+               status_id
+        FROM tb_order
+        WHERE store_id = #{storeId}
+          AND status_id IN (5, 6)
+        ORDER BY date DESC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         ORDER HISTORY (retailer view)
+         ═══════════════════════════════════════════════════════════════════════
+    -->
+
+    <select id="findTotalRetailerOrder" resultType="int">
+        SELECT COUNT(*)
+        FROM tb_order
+                 JOIN tb_order_detail tod ON tb_order.id = tod.order_id
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id IN (5, 6)
+    </select>
+
+    <select id="getRetailerOrderHistoryASC" resultMap="RetailerOrderDetailHistoryResultMap">
+        SELECT id,
+               store_id             AS storeId,
+               retailer_account_id AS retailerId,
+               created_date        AS date,
+               status_id
+        FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id IN (5, 6)
+        ORDER BY date ASC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getRetailerOrderHistoryDESC" resultMap="RetailerOrderDetailHistoryResultMap">
+        SELECT id,
+               store_id             AS storeId,
+               retailer_account_id AS retailerId,
+               created_date        AS date,
+               status_id
+        FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id IN (5, 6)
+        ORDER BY date DESC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         DRAFT HISTORY (retailer)
+         ═══════════════════════════════════════════════════════════════════════
+         status_id = 8 → draft orders not yet submitted
+    -->
+
+    <select id="findTotalRetailerDraft" resultType="int">
+        SELECT count(*) FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id = 8
+    </select>
+
+    <select id="getRetailerDraftASC" resultMap="RetailerOrderDetailHistoryResultMap">
+        SELECT id,
+               store_id             AS storeId,
+               retailer_account_id AS retailerId,
+               created_date        AS date,
+               status_id
+        FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id IN (8)
+        ORDER BY date ASC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="getRetailerDraftDESC" resultMap="RetailerOrderDetailHistoryResultMap">
+        SELECT id,
+               store_id             AS storeId,
+               retailer_account_id AS retailerId,
+               created_date        AS date,
+               status_id
+        FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND status_id IN (8)
+        ORDER BY date DESC
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </select>
+
+    <select id="checkDraftById" resultType="boolean">
+        SELECT EXISTS(SELECT * FROM tb_order WHERE id = #{id} AND status_id = 8)
+    </select>
+
+    <select id="deleteDraftById" resultType="int">
+        DELETE FROM tb_order WHERE id = #{id} RETURNING id
+    </select>
+
+    <select id="updateDraftById" resultType="int">
+        UPDATE tb_order SET status_id = 1 WHERE id = #{id} RETURNING id
+    </select>
+
+    <select id="getDraftHistory" resultMap="RetailerOrderDetailHistoryResultMap">
+        SELECT id,
+               store_id             AS storeId,
+               retailer_account_id AS retailerId,
+               created_date        AS date,
+               status_id
+        FROM tb_order
+        WHERE retailer_account_id = #{currentUserId}
+          AND id = #{id}
+          AND status_id IN (1)
+    </select>
+
+</mapper>

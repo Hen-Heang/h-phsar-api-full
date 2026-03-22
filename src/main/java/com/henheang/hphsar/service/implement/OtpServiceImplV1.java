@@ -1,5 +1,6 @@
 package com.henheang.hphsar.service.implement;
 
+import com.henheang.hphsar.common.utils.OtpUtils;
 import com.henheang.hphsar.exception.*;
 import com.henheang.hphsar.model.appUser.AppUser;
 import com.henheang.hphsar.model.otp.Otp;
@@ -9,17 +10,29 @@ import com.henheang.hphsar.service.OtpService;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Objects;
 import java.util.Random;
-import java.util.concurrent.TimeUnit;
-import java.sql.Time;
 
+/**
+ * OtpServiceImplV1 — OTP business logic
+ * <p>
+ * PROCESS — generateOtp():
+ *   1. Find the user by email (distributor or retailer)
+ *   2. FIX 8: Check if a valid OTP was already sent recently (rate limiting)
+ *      → Prevent email spam and DB flooding
+ *   3. Generate a random 4-digit number (1000–9999)
+ *   4. Save OTP to DB with current timestamp
+ *   5. Send OTP to user's email
+ * <p>
+ * PROCESS — verifyOtp():
+ *   1. Block if user is already verified
+ *   2. Load user + latest OTP from DB
+ *   3. Validate: email matches, OTP code matches, not expired (< 3 min)
+ *   4. Mark account as verified in DB (is_verified = true)
+ *   5. FIX 3: Delete OTP from DB after use (one-time use only)
+ */
 @Service
 public class OtpServiceImplV1 implements OtpService {
-    SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-    Date date;
 
     private final OtpRepository otpRepository;
     private final EmailService emailService;
@@ -29,116 +42,144 @@ public class OtpServiceImplV1 implements OtpService {
         this.emailService = emailService;
     }
 
-    public Boolean lessThan3MinutesCheck(Date createdDate) {
-        Date currentDate = new Date();
-        long diffInMillis = Math.abs(currentDate.getTime() - createdDate.getTime());
-        long diffInMinutes = TimeUnit.MINUTES.convert(diffInMillis, TimeUnit.MILLISECONDS);
-        return diffInMinutes < 3;
-    }
+    // ─── Helper: Check If User Account Is Already Verified ─────────────────────
 
-
-    Boolean checkIfUserIsActivated(String email) {
+    // Returns true if the user's email is already marked as verified in the DB
+    // Used to prevent verifying an already-active account
+    private boolean checkIfUserIsActivated(String email) {
         AppUser appUser = otpRepository.checkIfActivatedByDistributorEmail(email);
         if (appUser == null) {
             appUser = otpRepository.checkIfActivatedByRetailerEmail(email);
         }
-        Boolean isVerified = true;
-        if (appUser != null) {
-            return isVerified;
-        } else {
-            return false;
+        return appUser != null;
+    }
+
+    // ─── Helper: Get User By Email ──────────────────────────────────────────────
+
+    // Try distributor first, then retailer — the email can belong to either table
+    private AppUser getUserByEmail(String email) {
+        AppUser appUser = otpRepository.getUserDistributorByEmail(email);
+        if (appUser == null) {
+            appUser = otpRepository.getUserRetailerByEmail(email);
         }
+        return appUser;
     }
 
-    AppUser getUserDistributorByEmail(String email) {
-        return otpRepository.getUserDistributorByEmail(email);
+    // ─── Helper: Get Latest OTP By Email ───────────────────────────────────────
+
+    // Try distributor OTP table first, then retailer
+    private Otp getLatestOtpByEmail(String email) {
+        Otp otp = otpRepository.getDistributorOtpByEmail(email);
+        if (otp == null) {
+            otp = otpRepository.getRetailerOtpByEmail(email);
+        }
+        return otp;
     }
 
-    AppUser getUserRetailerByEmail(String email) {
-        return otpRepository.getUserRetailerByEmail(email);
-    }
+    // ─── Generate OTP ───────────────────────────────────────────────────────────
 
     @Override
     public String generateOtp(String email) {
-        Random rand = new Random();
-        Integer otpNumber = rand.nextInt(9000) + 1000;
-//        System.out.println(otpNumber);
 
-        AppUser appUser = getUserDistributorByEmail(email);
-        if (appUser == null) {
-            appUser = getUserRetailerByEmail(email);
-        }
+        // Step 1: Find the user — must exist before generating OTP
+        AppUser appUser = getUserByEmail(email);
         if (appUser == null) {
             throw new BadRequestException("This user does not exist.");
         }
-        Integer currentUserId = appUser.getId();
-        // need OTP for reset password
-//        if (checkIfUserIsActivated(email)) {
-//            throw new ConflictException("This User is already verified");
-//        }
-        long timeInMilli = System.currentTimeMillis();
-        Otp otp = null;
-        emailService.sendSimpleMail(email, "Here is your verification code: " + otpNumber, otpNumber + " - Warehouse master verification code");
+
+        // Step 2 (FIX 8 — Rate Limiting):
+        // Check if user already has a valid OTP that hasn't expired yet.
+        // WHY: Without this check, users could spam the endpoint and flood
+        //      their inbox or fill the OTP table with thousands of records.
+        Otp existingOtp = getLatestOtpByEmail(email);
+        if (existingOtp != null && OtpUtils.isNotExpired(existingOtp.getCreatedDate())) {
+            throw new ConflictException(
+                "An OTP was already sent. Please wait " + OtpUtils.OTP_EXPIRY_MINUTES + " minutes before requesting a new one."
+            );
+        }
+
+        // Step 3: Generate a random 4-digit OTP code (1000–9999)
+        // nextInt(9000) gives 0–8999, adding 1000 shifts range to 1000–9999
+        Integer otpNumber = new Random().nextInt(9000) + 1000;
+
+        // Step 4: Save the OTP to the correct table based on user role
+        // roleId 1 = DISTRIBUTOR → tb_distributor_otp
+        // roleId 2 = RETAILER    → tb_retailer_otp
+        Otp otp;
+        java.sql.Timestamp time = new Timestamp(System.currentTimeMillis());
         if (appUser.getRoleId() == 1) {
-            java.sql.Timestamp time = new Timestamp(timeInMilli);
-            otp = otpRepository.generateDistributorOtp(currentUserId, otpNumber, email, time);
+            otp = otpRepository.generateDistributorOtp(appUser.getId(), otpNumber, email, time);
         } else {
-            java.sql.Timestamp time = new Timestamp(timeInMilli);
-            otp = otpRepository.generateRetailerOtp(currentUserId, otpNumber, email, time);
+            otp = otpRepository.generateRetailerOtp(appUser.getId(), otpNumber, email, time);
         }
-        // if generate OTP success, send email
+
         if (otp == null) {
-            throw new InternalServerErrorException("Failed to generate OTP...");
+            throw new InternalServerErrorException("Failed to generate OTP.");
         }
+
+        // Step 5: Send OTP code to the user's email
+        emailService.sendSimpleMail(
+            email,
+            "Here is your verification code: " + otpNumber,
+            otpNumber + " - H-Phsar verification code"
+        );
 
         return "We've already sent you the code to " + email;
     }
 
+    // ─── Verify OTP ─────────────────────────────────────────────────────────────
+
     @Override
     public String verifyOtp(Integer otp, String email) {
-        // Check if user is already verified
+
+        // Step 1: Block re-verification — account is already active
         if (checkIfUserIsActivated(email)) {
-            throw new ConflictException("This User is already verified");
-        }
-        // get user by email
-        AppUser appUser = new AppUser();
-        Otp otpObj = new Otp();
-        appUser = getUserDistributorByEmail(email);
-        otpObj = otpRepository.getDistributorOtpByEmail(email);
-        if (appUser == null || otpObj == null) {
-            appUser = getUserRetailerByEmail(email);
-            otpObj = otpRepository.getRetailerOtpByEmail(email);
+            throw new ConflictException("This user is already verified.");
         }
 
-        String returnMsg = "User has been verified";
+        // Step 2: Load user and their latest OTP from DB
+        AppUser appUser = getUserByEmail(email);
+        Otp otpObj = getLatestOtpByEmail(email);
+
         if (appUser == null) {
             throw new BadRequestException("This user does not exist.");
         }
         if (otpObj == null) {
-            throw new BadRequestException("This OTP code does not exist.");
+            throw new BadRequestException("No OTP found. Please request a new one.");
         }
-        // check if request and database of OTP matches
+
+        // Step 3: Validate the OTP
+        // Check 1 — email in OTP record must match the request email
         if (!Objects.equals(appUser.getEmail(), otpObj.getEmail())) {
-            throw new BadRequestException("Email not match");
-        } else if (!Objects.equals(otpObj.getOtpCode(), otp)) {
-            throw new BadRequestException("OTP code not match");
+            throw new BadRequestException("Email not match.");
         }
-        // check timeout of 3 minutes
-        else if (!lessThan3MinutesCheck(otpObj.getCreatedDate())) {
-            throw new BadRequestException("OTP Expired");
+        // Check 2 — OTP code must match what was saved in DB
+        if (!Objects.equals(otpObj.getOtpCode(), otp)) {
+            throw new BadRequestException("OTP code not match.");
         }
-        // if everything is success, verify that email
+        // Check 3 — OTP must be within expiry window (FIX 4: using shared OtpUtils)
+        // WHY: Without this, an OTP from last week could still be used to verify
+        if (!OtpUtils.isNotExpired(otpObj.getCreatedDate())) {
+            throw new BadRequestException("OTP expired. Please request a new one.");
+        }
 
+        // Step 4: Mark account as verified in DB (is_verified = true)
+        // Try distributor first — if '1' returned, update was successful
         String confirm = otpRepository.verifyDistributor(email);
-        if (Objects.equals(confirm, "1")) {
-            return returnMsg;
+        if (!Objects.equals(confirm, "1")) {
+            // If not a distributor, try retailer
+            confirm = otpRepository.verifyRetailer(email);
+        }
+        if (!Objects.equals(confirm, "1")) {
+            throw new InternalServerErrorException("Verification failed. Please try again.");
         }
 
-        confirm = otpRepository.verifyRetailer(email);
-        if (Objects.equals(confirm, "1")) {
-            return returnMsg;
-        }
-        return "Verifying OTP failed";
+        // Step 5 (FIX 3 — Delete OTP after use):
+        // WHY: OTP is now consumed. Delete it so it cannot be reused.
+        //      Both deletes are called — only the matching one will affect rows.
+        otpRepository.deleteDistributorOtp(email);
+        otpRepository.deleteRetailerOtp(email);
+
+        return "Account has been verified successfully.";
     }
-
 }

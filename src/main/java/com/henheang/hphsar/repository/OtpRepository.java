@@ -2,98 +2,60 @@ package com.henheang.hphsar.repository;
 
 import com.henheang.hphsar.model.appUser.AppUser;
 import com.henheang.hphsar.model.otp.Otp;
-import org.apache.ibatis.annotations.*;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 
+/**
+ * OtpRepository — OTP Database Operations
+ *
+ * All SQL is now in: resources/mapper/OtpMapper.xml
+ *
+ * This interface only declares method signatures.
+ * MyBatis matches each method here to a SQL block in OtpMapper.xml
+ * using the method name as the id.
+ *
+ * Example:
+ *   Java:  Otp getDistributorOtpByEmail(String email)
+ *   XML:   <select id="getDistributorOtpByEmail" ...>SELECT ...</select>
+ */
 @Mapper
 public interface OtpRepository {
 
-    @Select("""
-            SELECT ta.id as id, email, password, tr.name as role, role_id as roleId, is_verified as isVerified, is_active as isActive FROM tb_distributor_account as ta
-            JOIN tb_role tr ON ta.role_id = tr.id
-            WHERE email = #{email}
-            AND is_verified = TRUE;
-            """)
-    @Result(property = "userId", column = "user_id")
+    // ─── CHECK IF ACCOUNT IS VERIFIED ──────────────────────────────────────────
+    // Returns user only if is_verified = TRUE — null means not yet verified
     AppUser checkIfActivatedByDistributorEmail(String email);
-
-    @Select("""
-            SELECT ta.id as id, email, password, tr.name as role, role_id as roleId, is_verified as isVerified, is_active as isActive FROM tb_retailer_account as ta
-            JOIN tb_role tr ON ta.role_id = tr.id
-            WHERE email = #{email}
-            AND is_verified = TRUE;
-            """)
-    @Result(property = "userId", column = "user_id")
     AppUser checkIfActivatedByRetailerEmail(String email);
 
-
-//    @Select("""
-//            INSERT INTO tb_distributor_otp
-//            VALUES (DEFAULT, #{currentUserId}, #{otpNumber}, #{email}, DEFAULT)
-//            RETURNING *;
-//            """)
-//    Otp generateDistributorOtp(Integer currentUserId, Integer otpNumber, String email);
-
-    @Select("""
-            INSERT INTO tb_distributor_otp
-            VALUES (DEFAULT, #{currentUserId}, #{otpNumber}, #{email}, #{time})
-            RETURNING *;
-            """)
-    Otp generateDistributorOtp(Integer currentUserId, Integer otpNumber, String email, java.sql.Timestamp time);
-
-    @Select("""
-            INSERT INTO tb_retailer_otp
-            VALUES (DEFAULT, #{currentUserId}, #{otpNumber}, #{email}, #{time})
-            RETURNING *;
-            """)
-    Otp generateRetailerOtp(Integer currentUserId, Integer otpNumber, String email, java.sql.Timestamp time);
-
-    @Select("""
-            SELECT ta.id as id, email, password, tr.name as role, role_id as roleId, is_verified as isVerified, is_active as isActive FROM tb_distributor_account as ta
-            JOIN tb_role tr ON ta.role_id = tr.id
-            WHERE email = #{email};
-            """)
-    @Result(property = "userId", column = "user_id")
+    // ─── GET USER BY EMAIL ─────────────────────────────────────────────────────
+    // Used to find which account the email belongs to before generating OTP
     AppUser getUserDistributorByEmail(String email);
-
-    @Select("""
-            SELECT ta.id as id, email, password, tr.name as role, role_id as roleId, is_verified as isVerified, is_active as isActive FROM tb_retailer_account as ta
-            JOIN tb_role tr ON ta.role_id = tr.id
-            WHERE email = #{email};
-            """)
-    @Result(property = "userId", column = "user_id")
     AppUser getUserRetailerByEmail(String email);
 
-    @Select("""
-            SELECT id, distributor_account_id as distributorAccountId, otp_code as otpCode, distributor_email as email, created_date AS createdDate
-            FROM tb_distributor_otp
-            WHERE distributor_email = #{email}
-            ORDER BY created_date DESC
-            LIMIT 1;
-            """)
-    Otp getDistributorOtpByEmail(String email);
+    // ─── GENERATE OTP ──────────────────────────────────────────────────────────
+    // @Param is required because the method has multiple parameters
+    // Without @Param, MyBatis cannot tell which value belongs to which #{placeholder}
+    Otp generateDistributorOtp(@Param("currentUserId") Integer currentUserId,
+                                @Param("otpNumber") Integer otpNumber,
+                                @Param("email") String email,
+                                @Param("time") java.sql.Timestamp time);
 
-    @Select("""
-            SELECT id, retailer_account_id as distributorAccountId, otp_code as otpCode, retailer_email as email, created_date AS createdDate
-            FROM tb_retailer_otp
-            WHERE retailer_email = #{email}
-            ORDER BY created_date DESC
-            LIMIT 1;
-            """)
+    Otp generateRetailerOtp(@Param("currentUserId") Integer currentUserId,
+                             @Param("otpNumber") Integer otpNumber,
+                             @Param("email") String email,
+                             @Param("time") java.sql.Timestamp time);
+
+    // ─── GET LATEST OTP ────────────────────────────────────────────────────────
+    // Fetches the most recently generated OTP for a given email
+    Otp getDistributorOtpByEmail(String email);
     Otp getRetailerOtpByEmail(String email);
 
-    @Select("""
-            UPDATE tb_distributor_account
-            SET is_verified = true
-            WHERE email = #{email}
-            RETURNING '1';
-            """)
+    // ─── VERIFY ACCOUNT ────────────────────────────────────────────────────────
+    // Sets is_verified = true, returns '1' on success
     String verifyDistributor(String email);
-
-    @Select("""
-            UPDATE tb_retailer_account
-            SET is_verified = true
-            WHERE email = #{email}
-            RETURNING '1';
-            """)
     String verifyRetailer(String email);
+
+    // ─── DELETE OTP AFTER USE ──────────────────────────────────────────────────
+    // Deletes OTP record after it has been used — prevents reuse
+    void deleteDistributorOtp(String email);
+    void deleteRetailerOtp(String email);
 }
