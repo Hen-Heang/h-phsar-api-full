@@ -20,7 +20,7 @@ import java.util.Date;
 @RestController
 @Tag(name = "Distributor Report Controller")
 @RequestMapping("${base.distributor.v1}/reports")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 public class DistributorReportController {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
 
@@ -30,7 +30,7 @@ public class DistributorReportController {
         this.distributorReportService = distributorReportService;
     }
     @Operation(summary = "Get report")
-    @GetMapping("")
+    @GetMapping("/")
     public ResponseEntity<?> getDistributorReport(@RequestParam(defaultValue = "yyyy-mm") String startDate, @RequestParam(defaultValue = "yyyy-mm") String endDate) throws ParseException {
         ApiResponse<DistributorReport> response = ApiResponse.<DistributorReport>builder()
                 .status(HttpStatus.OK.value())

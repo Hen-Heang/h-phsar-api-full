@@ -26,7 +26,7 @@ import java.util.List;
 
 @Tag(name = "Retailer order Controller")
 @RequestMapping("${base.retailer.v1}/orders")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 public class OrderRetailerController {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -148,7 +148,7 @@ public class OrderRetailerController {
     }
 
     @Operation(summary = "Get order list and it's progress")
-    @GetMapping("")
+    @GetMapping("/")
     public ResponseEntity<?> getOrderActivities(@RequestParam(defaultValue = "asc") String sort, @RequestParam Integer pageNumber, @RequestParam Integer pageSize) throws ParseException {
         if (pageNumber > 2147483646 || pageSize > 2147483646){
             throw new BadRequestException("Integer value can not exceed 2147483646");

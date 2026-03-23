@@ -13,7 +13,6 @@ import com.henheang.hphsar.model.otp.Otp;
 import com.henheang.hphsar.repository.AppUserRepository;
 import com.henheang.hphsar.repository.OtpRepository;
 import com.henheang.hphsar.service.JwtUserDetailsService;
-import org.modelmapper.ModelMapper;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -44,19 +43,12 @@ public class JwtUserDetailsServiceImpl implements UserDetailsService, JwtUserDet
     private final AppUserRepository appUserRepository;
     private final OtpRepository otpRepository;
     private final PasswordEncoder passwordEncoder;
-    private final ModelMapper modelMapper;
-
-    // FIX 5: Use constructor injection for ALL dependencies
-    // WHY: @Autowired field injection is harder to unit test and hides dependencies.
-    //      Constructor injection makes dependencies explicit and easy to see.
     public JwtUserDetailsServiceImpl(AppUserRepository appUserRepository,
                                      OtpRepository otpRepository,
-                                     PasswordEncoder passwordEncoder,
-                                     ModelMapper modelMapper) {
+                                     PasswordEncoder passwordEncoder) {
         this.appUserRepository = appUserRepository;
         this.otpRepository = otpRepository;
         this.passwordEncoder = passwordEncoder;
-        this.modelMapper = modelMapper;
     }
 
     // ─── Email Validation ───────────────────────────────────────────────────────
@@ -145,8 +137,7 @@ public class JwtUserDetailsServiceImpl implements UserDetailsService, JwtUserDet
             appUser = appUserRepository.insertRetailerUser(appUserRequest);
         }
 
-        // Map AppUser entity to AppUserDto (safe response — no password returned)
-        return modelMapper.map(appUser, AppUserDto.class);
+        return toDto(appUser);
     }
 
     // ─── Check Email Verification Status ───────────────────────────────────────
@@ -207,7 +198,7 @@ public class JwtUserDetailsServiceImpl implements UserDetailsService, JwtUserDet
             updatedUser = appUserRepository.updateRetailerUser(request);
         }
 
-        return modelMapper.map(updatedUser, AppUserDto.class);
+        return toDto(updatedUser);
     }
 
     // ─── Forget Password (uses OTP) ─────────────────────────────────────────────
@@ -276,6 +267,18 @@ public class JwtUserDetailsServiceImpl implements UserDetailsService, JwtUserDet
         // WHY: If the response is intercepted (man-in-the-middle), the attacker
         //      would get the user's new password in plain text.
         return "Password updated successfully. Please log in with your new password.";
+    }
+
+    // ─── Mapping Helper ─────────────────────────────────────────────────────────
+
+    private AppUserDto toDto(AppUser user) {
+        AppUserDto dto = new AppUserDto();
+        dto.setId(user.getId());
+        dto.setEmail(user.getEmail());
+        dto.setRoleId(user.getRoleId());
+        dto.setIsVerified(user.getIsVerified());
+        dto.setIsActive(user.getIsActive());
+        return dto;
     }
 
     // ─── Role & User ID Helpers ─────────────────────────────────────────────────

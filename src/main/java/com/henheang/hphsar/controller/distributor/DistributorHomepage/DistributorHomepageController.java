@@ -21,7 +21,7 @@ import java.util.Date;
 @RestController
 @Tag(name = "Distributor Homepage Controller")
 @RequestMapping("${base.distributor.v1}/order_activities")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 public class DistributorHomepageController extends BaseController {
 
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -38,7 +38,7 @@ public class DistributorHomepageController extends BaseController {
         this.distributorHomepageService = distributorHomepageService;
     }
 
-    @GetMapping("")
+    @GetMapping("/")
     public ResponseEntity<?> getNewOrder(){
         AppUser appUser= (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer  currentUserId= appUser.getId();

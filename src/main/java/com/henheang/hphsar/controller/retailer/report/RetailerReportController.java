@@ -20,7 +20,7 @@ import java.util.Date;
 @RestController
 @Tag(name = "Retailer Report Controller")
 @RequestMapping("${base.retailer.v1}/reports")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 public class RetailerReportController {
     private final RetailerReportService retailerReportService;
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -31,7 +31,7 @@ public class RetailerReportController {
     }
 
     @Operation(summary = "Get retailer report")
-    @GetMapping("")
+    @GetMapping("/")
     public ResponseEntity<?> getRetailerMonthlyReport(
             @RequestParam(defaultValue = "yyyy-mm") String startDate,
             @RequestParam(defaultValue = "yyyy-mm") String endDate

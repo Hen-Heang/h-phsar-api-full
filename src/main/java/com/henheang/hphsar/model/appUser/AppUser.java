@@ -25,11 +25,12 @@ public class AppUser implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        if (roleId == 1){
-            setRole("DISTRIBUTOR");
-        } else if (roleId == 2){
-            setRole("RETAILER");
+        if (roleId != null && roleId == 1) {
+            role = "DISTRIBUTOR";
+        } else if (roleId != null && roleId == 2) {
+            role = "RETAILER";
         }
+        if (role == null) return Collections.emptyList();
         SimpleGrantedAuthority authority = new SimpleGrantedAuthority(role.toUpperCase());
         return Collections.singletonList(authority);
     }

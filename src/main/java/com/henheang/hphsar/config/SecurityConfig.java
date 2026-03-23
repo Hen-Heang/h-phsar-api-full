@@ -3,6 +3,7 @@ package com.henheang.hphsar.config;
 import com.henheang.hphsar.service.implement.JwtUserDetailsServiceImpl;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -71,6 +72,7 @@ public class SecurityConfig {
             .cors(cors -> cors.disable())
             .csrf(csrf -> csrf.disable()) // disable CSRF since we use stateless JWT, not cookies
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/v1/retailer/**").hasAuthority("RETAILER")
                 .requestMatchers("/api/v1/distributor/**").hasAuthority("DISTRIBUTOR")
                 .requestMatchers(

@@ -26,7 +26,7 @@ import java.util.List;
 @RestController
 @Tag(name = "Distributor Product Controller")
 @RequestMapping("${base.distributor.v1}/products")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 public class ProductDistributorController {
 
     private final ProductDistributorService productDistributorService;
@@ -38,7 +38,7 @@ public class ProductDistributorController {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date;
 
-    @PostMapping("")
+    @PostMapping("/")
     @Operation(summary = "Add new product")
     public ResponseEntity<?> insertNewProduct(@RequestBody ArrayList<ProductRequest> productRequests) throws ParseException {
         for (ProductRequest productRequest : productRequests){

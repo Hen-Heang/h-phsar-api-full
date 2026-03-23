@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: h-phsar
+
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:123}
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+#  flyway:
+#    baseline-on-migrate: true
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+server:
+  port: 8080
+
+management:
+  health:
+    mail:
+      enabled: false
+
+jwt:
+  # HS512 requires >= 512 bits (64 chars). Override with JWT_SECRET env var in production.
+  secret: ${JWT_SECRET:hPhsarDefaultSecretKeyMustBeAtLeast64CharsForHs512AlgorithmSecurity}
+
+base:
+  distributor:
+    v1: /api/v1/distributor
+  retailer:
+    v1: /api/v1/retailer
+
+mybatis:
+  mapper-locations: classpath:/mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    default-statement-timeout: 30
+
+file:
+  upload-dir: uploads

@@ -20,7 +20,7 @@ import java.util.Date;
 @RestController
 @Tag(name = "Retailer Profile Controller")
 @RequestMapping("${base.retailer.v1}/profiles")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 public class RetailerProfileController {
 
     private final RetailerProfileService retailerProfileService;
@@ -33,7 +33,7 @@ public class RetailerProfileController {
         this.retailerProfileService = retailerProfileService;
     }
 
-    @PostMapping("")
+    @PostMapping("/")
     public ResponseEntity<?> createRetailerProfile(@RequestBody RetailerRequest retailerRequest) {
         AppUser appUser= (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId= appUser.getId();
@@ -46,7 +46,7 @@ public class RetailerProfileController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @GetMapping("")
+    @GetMapping("/")
     public ResponseEntity<?> getRetailerProfile() throws ParseException {
         AppUser appUser= (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId= appUser.getId();
@@ -59,7 +59,7 @@ public class RetailerProfileController {
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("")
+    @PutMapping("/")
     public ResponseEntity<?> updateRetailerProfile(@RequestBody RetailerRequest retailerRequest)  {
         AppUser appUser= (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId= appUser.getId();

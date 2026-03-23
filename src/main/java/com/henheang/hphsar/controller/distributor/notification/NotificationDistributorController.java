@@ -17,7 +17,7 @@ import java.util.List;
 
 @Tag(name = "Distributor Notification Controller")
 @RequestMapping("${base.distributor.v1}/notifications")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 public class NotificationDistributorController {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
@@ -28,7 +28,7 @@ public class NotificationDistributorController {
     }
 
     @Operation(summary = "Get all notification")
-    @GetMapping("")
+    @GetMapping("/")
     public ResponseEntity<?> getUserAllNotification() throws ParseException {
         ApiResponse<List<NotificationRetailer>> response = ApiResponse.<List<NotificationRetailer>>builder()
                 .status(HttpStatus.OK.value())

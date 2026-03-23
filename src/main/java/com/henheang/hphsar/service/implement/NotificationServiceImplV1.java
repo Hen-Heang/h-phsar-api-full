@@ -33,28 +33,15 @@ public class NotificationServiceImplV1 implements NotificationService {
         Integer currentUserId = appUser.getId();
         List<NotificationRetailer> notifications = new ArrayList<>();
         if (appUser.getRoleId() == 2) {
-            // check if there is notification
             if (!notificationRepository.checkForRetailerNotification(currentUserId)) {
-                throw new NotFoundException("Notification not found.");
+                return notifications; // empty list — no notifications yet
             }
-            // check if retailer have unread notification
-//            if (!notificationRepository.checkRetailerUnReadNotification(currentUserId)) {
-//                throw new NotFoundException("You have no unread notification.");
-//            }
-            // get notification
             notifications = notificationRepository.getRetailerUserAllNotification(currentUserId);
         } else if (appUser.getRoleId() == 1) {
-            // check if there is notification in store
             if (!notificationRepository.checkForDistributorNotification(currentUserId)) {
-                throw new NotFoundException("Notification not found.");
+                return notifications; // empty list — no notifications yet
             }
-            // check if retailer have unread notification
-//            if (!notificationRepository.checkDistributorUnReadNotification(currentUserId)) {
-//                throw new NotFoundException("You have no unread notification.");
-//            }
-            // get notification
             notifications = notificationRepository.getDistributorUserAllNotification(currentUserId);
-
         }
         // check and format
         if (notifications == null) {

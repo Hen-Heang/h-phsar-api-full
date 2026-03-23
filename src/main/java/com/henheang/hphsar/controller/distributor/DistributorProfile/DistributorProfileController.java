@@ -20,7 +20,7 @@ import java.text.ParseException;
 @RestController
 @Tag(name = "Distributor Profile Controller")
 @RequestMapping("${base.distributor.v1}/profiles")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 @RequiredArgsConstructor
 public class DistributorProfileController  extends BaseController {
 

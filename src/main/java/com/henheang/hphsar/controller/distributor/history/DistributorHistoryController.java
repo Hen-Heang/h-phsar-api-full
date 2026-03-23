@@ -22,7 +22,7 @@ import java.util.List;
 @RestController
 @Tag(name = "Distributor history Controller")
 @RequestMapping("${base.distributor.v1}/history")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 public class DistributorHistoryController {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private final HistoryService historyService;

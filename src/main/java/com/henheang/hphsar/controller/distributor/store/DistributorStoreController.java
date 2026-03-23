@@ -20,7 +20,7 @@ import java.util.Date;
 @RestController
 @Tag(name = "Distributor Store Controller")
 @RequestMapping("${base.distributor.v1}/stores")
-@SecurityRequirement(name = "bearer")
+@SecurityRequirement(name = "bearerAuth")
 public class DistributorStoreController {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date;
@@ -30,7 +30,7 @@ public class DistributorStoreController {
         this.distributorStoreService = distributorStoreService;
     }
     @Operation(summary = "Setup new store")
-    @PostMapping("")
+    @PostMapping("/")
     public ResponseEntity<?> createStore(@RequestBody StoreRequest storeRequest) throws ParseException {
         AppUser appUser = (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId = appUser.getId();
@@ -56,7 +56,7 @@ public class DistributorStoreController {
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("")
+    @PutMapping("/")
     public ResponseEntity<?> editAllFieldUserStore(@RequestBody StoreRequest storeRequest) throws ParseException {
         AppUser appUser = (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId = appUser.getId();
@@ -69,7 +69,7 @@ public class DistributorStoreController {
         return ResponseEntity.ok(response);
     }
 
-    @DeleteMapping("")
+    @DeleteMapping("/")
     public ResponseEntity<?> deleteUserStore() {
         AppUser appUser = (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId = appUser.getId();
