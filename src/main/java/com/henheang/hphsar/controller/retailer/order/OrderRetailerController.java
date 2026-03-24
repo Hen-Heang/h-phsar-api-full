@@ -148,7 +148,7 @@ public class OrderRetailerController {
     }
 
     @Operation(summary = "Get order list and it's progress")
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<?> getOrderActivities(@RequestParam(defaultValue = "asc") String sort, @RequestParam Integer pageNumber, @RequestParam Integer pageSize) throws ParseException {
         if (pageNumber > 2147483646 || pageSize > 2147483646){
             throw new BadRequestException("Integer value can not exceed 2147483646");
@@ -192,7 +192,7 @@ public class OrderRetailerController {
 
 
     @Operation(summary = "confirm transaction")
-    @PutMapping("/{id}/recieve")
+    @PutMapping("/{id}/receive")
     public ResponseEntity<?> confirmTransaction(@PathVariable Integer id) {
         if (id > 2147483646){
             throw new BadRequestException("Integer value can not exceed 2147483646");

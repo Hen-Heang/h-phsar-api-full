@@ -38,7 +38,7 @@ public class ProductDistributorController {
     SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Date date;
 
-    @PostMapping("/")
+    @PostMapping
     @Operation(summary = "Add new product")
     public ResponseEntity<?> insertNewProduct(@RequestBody ArrayList<ProductRequest> productRequests) throws ParseException {
         for (ProductRequest productRequest : productRequests){

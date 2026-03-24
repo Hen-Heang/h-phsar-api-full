@@ -30,7 +30,7 @@ public class DistributorReportController {
         this.distributorReportService = distributorReportService;
     }
     @Operation(summary = "Get report")
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<?> getDistributorReport(@RequestParam(defaultValue = "yyyy-mm") String startDate, @RequestParam(defaultValue = "yyyy-mm") String endDate) throws ParseException {
         ApiResponse<DistributorReport> response = ApiResponse.<DistributorReport>builder()
                 .status(HttpStatus.OK.value())

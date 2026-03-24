@@ -356,7 +356,7 @@
         FROM tb_store_product_detail td
                  INNER JOIN tb_product tp ON td.product_id = tp.id
         WHERE td.store_id = #{storeId} AND td.is_publish = true
-        ORDER BY ${by} ASC
+        ORDER BY td.${by} ASC
     </select>
 
     <select id="getProductListingByStoreIdDESC" resultMap="ProductWithCategoryResultMap">
@@ -373,7 +373,7 @@
         FROM tb_store_product_detail td
                  INNER JOIN tb_product tp ON td.product_id = tp.id
         WHERE td.store_id = #{storeId} AND td.is_publish = true
-        ORDER BY ${by} DESC
+        ORDER BY td.${by} DESC
     </select>
 
     <select id="getProductListingByStoreIdAndCategoryId" resultMap="ProductWithCategoryResultMap">
@@ -789,7 +789,7 @@
     <select id="checkDuplicatePhone" resultType="boolean">
         SELECT EXISTS(SELECT * FROM tb_store
                                        INNER JOIN tb_store_phone tsp ON tb_store.id = tsp.store_id
-                      WHERE phone = #{primaryPhone} OR tsp.phone = #{primaryPhone})
+                      WHERE tb_store.phone = #{primaryPhone} OR tsp.phone = #{primaryPhone})
     </select>
 
     <select id="getStoreImageByStoreId" resultType="String">

@@ -12,6 +12,7 @@ import com.henheang.hphsar.repository.NotificationRepository;
 import com.henheang.hphsar.repository.OrderDistributorRepository;
 import com.henheang.hphsar.repository.StoreRepository;
 import com.henheang.hphsar.service.OrderDistributorService;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
@@ -26,11 +27,13 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
     private final OrderDistributorRepository orderDistributorRepository;
     private final StoreRepository storeRepository;
     private final NotificationRepository notificationRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
-    public OrderDistributorServiceImplV1(OrderDistributorRepository orderDistributorRepository, StoreRepository storeRepository, NotificationRepository notificationRepository) {
+    public OrderDistributorServiceImplV1(OrderDistributorRepository orderDistributorRepository, StoreRepository storeRepository, NotificationRepository notificationRepository, SimpMessagingTemplate messagingTemplate) {
         this.orderDistributorRepository = orderDistributorRepository;
         this.storeRepository = storeRepository;
         this.notificationRepository = notificationRepository;
+        this.messagingTemplate = messagingTemplate;
     }
 
     @Override
@@ -347,6 +350,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
             notificationRepository.deleteNotification(check);
             throw new InternalServerErrorException("Fail to create notification. Reason: " + e);
         }
+        messagingTemplate.convertAndSend("/topic/notifications/" + orderDetail.getOrder().getRetailerId(), "NEW_NOTIFICATION");
         return "Successfully accept order.";
     }
 
@@ -388,6 +392,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
             notificationRepository.deleteNotification(check);
             throw new InternalServerErrorException("Fail to create notification. Reason: " + e);
         }
+        messagingTemplate.convertAndSend("/topic/notifications/" + orderDetail.getOrder().getRetailerId(), "NEW_NOTIFICATION");
         return "Successfully decline order.";
     }
 
@@ -411,6 +416,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
         if (delivering == null){
             throw new InternalServerErrorException("Fail to create notification.");
         }
+        messagingTemplate.convertAndSend("/topic/notifications/" + orderDetail.getOrder().getRetailerId(), "NEW_NOTIFICATION");
         return "Finish preparing.";
     }
 
@@ -434,6 +440,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
         if (delivering == null){
             throw new InternalServerErrorException("Fail to create notification.");
         }
+        messagingTemplate.convertAndSend("/topic/notifications/" + orderDetail.getOrder().getRetailerId(), "NEW_NOTIFICATION");
         return "Finish Dispatching. Order is delivered.";
     }
 

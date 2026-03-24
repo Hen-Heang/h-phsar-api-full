@@ -30,7 +30,7 @@ public class DistributorStoreController {
         this.distributorStoreService = distributorStoreService;
     }
     @Operation(summary = "Setup new store")
-    @PostMapping("/")
+    @PostMapping
     public ResponseEntity<?> createStore(@RequestBody StoreRequest storeRequest) throws ParseException {
         AppUser appUser = (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId = appUser.getId();
@@ -43,7 +43,7 @@ public class DistributorStoreController {
         return ResponseEntity.status(HttpStatus.CREATED).body(storeApiResponse);
     }
 
-    @GetMapping("/user/")
+    @GetMapping("/user")
     public ResponseEntity<?> getUserStore() throws ParseException {
         AppUser appUser = (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId = appUser.getId();
@@ -56,7 +56,7 @@ public class DistributorStoreController {
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/")
+    @PutMapping
     public ResponseEntity<?> editAllFieldUserStore(@RequestBody StoreRequest storeRequest) throws ParseException {
         AppUser appUser = (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId = appUser.getId();
@@ -69,7 +69,7 @@ public class DistributorStoreController {
         return ResponseEntity.ok(response);
     }
 
-    @DeleteMapping("/")
+    @DeleteMapping
     public ResponseEntity<?> deleteUserStore() {
         AppUser appUser = (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId = appUser.getId();

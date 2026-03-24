@@ -38,7 +38,7 @@ public class DistributorHomepageController extends BaseController {
         this.distributorHomepageService = distributorHomepageService;
     }
 
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<?> getNewOrder(){
         AppUser appUser= (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer  currentUserId= appUser.getId();

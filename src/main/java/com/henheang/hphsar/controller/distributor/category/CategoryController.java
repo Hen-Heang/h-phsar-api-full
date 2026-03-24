@@ -35,7 +35,7 @@ public class CategoryController {
 
 
     @Operation(summary = "Fetch all category from store")
-    @GetMapping("/")
+    @GetMapping("")
     public ResponseEntity<?> getAllCategory(@RequestParam Integer pageNumber, @RequestParam Integer pageSize) throws ParseException {
         if (pageNumber > 2147483646 || pageSize > 2147483646){
             throw new BadRequestException("Integer value can not exceed 2147483646");
@@ -99,7 +99,7 @@ public class CategoryController {
 
 
     @Operation(summary = "Create new category")
-    @PostMapping("/")
+    @PostMapping("")
     public ResponseEntity<?> createCategoryStore(@RequestParam String name) throws ParseException {
         ApiResponse<Category> response = ApiResponse.<Category>builder()
                 .status(HttpStatus.CREATED.value())

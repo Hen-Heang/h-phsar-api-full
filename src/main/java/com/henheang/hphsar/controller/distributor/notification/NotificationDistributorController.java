@@ -28,7 +28,7 @@ public class NotificationDistributorController {
     }
 
     @Operation(summary = "Get all notification")
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<?> getUserAllNotification() throws ParseException {
         ApiResponse<List<NotificationRetailer>> response = ApiResponse.<List<NotificationRetailer>>builder()
                 .status(HttpStatus.OK.value())

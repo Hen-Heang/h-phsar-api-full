@@ -27,7 +27,7 @@ public class DistributorProfileController  extends BaseController {
     private final DistributorProfileService userProfileService;
 
     @Operation(summary = "Get user profile")
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<ApiResponse<Distributor>> getUserProfileById() throws ParseException {
         AppUser appUser=(AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId= appUser.getId();
@@ -36,7 +36,7 @@ public class DistributorProfileController  extends BaseController {
     }
 
     @Operation(summary = "Create profile")
-    @PostMapping("/")
+    @PostMapping
     public ResponseEntity<ApiResponse<Distributor>> addUserProfile(@RequestBody DistributorRequest distributorRequest) throws ParseException {
         AppUser appUser= (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId= appUser.getId();
@@ -45,7 +45,7 @@ public class DistributorProfileController  extends BaseController {
     }
 
     @Operation(summary = "Update profile")
-    @PutMapping("/")
+    @PutMapping
     public ResponseEntity<ApiResponse<Distributor>> updateUserProfile(@RequestBody DistributorRequest distributorRequest) throws ParseException {
         AppUser appUser= (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId= appUser.getId();

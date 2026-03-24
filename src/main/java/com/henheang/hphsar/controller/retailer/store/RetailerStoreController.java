@@ -35,7 +35,7 @@ public class RetailerStoreController {
     }
 
     @Operation(summary = "Get all store")
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<?> getAllStore() throws ParseException {
         ApiResponse<List<StoreRetailer>> response = ApiResponse.<List<StoreRetailer>>builder()
                 .status(HttpStatus.OK.value())
@@ -160,7 +160,7 @@ public class RetailerStoreController {
     }
 
     @Operation(summary = "Bookmark a store")
-    @PostMapping("/{storeId}/bookmark/")
+    @PostMapping("/{storeId}/bookmark")
     public ResponseEntity<?> bookmarkStoreById(@PathVariable Integer storeId) {
         if (storeId > 2147483646) {
             throw new BadRequestException("Integer value can not exceed 2147483646");

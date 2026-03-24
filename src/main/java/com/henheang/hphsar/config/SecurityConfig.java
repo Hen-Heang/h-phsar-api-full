@@ -80,7 +80,8 @@ public class SecurityConfig {
                         "/api/v1/files/**",
                         "/v3/api-docs/**",
                         "/swagger-ui/**",
-                        "/swagger-ui.html"
+                        "/swagger-ui.html",
+                        "/ws/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             )
@@ -94,6 +95,7 @@ public class SecurityConfig {
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+
     }
 
     /**

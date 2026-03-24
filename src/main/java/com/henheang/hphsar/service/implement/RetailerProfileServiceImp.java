@@ -70,7 +70,7 @@ public class RetailerProfileServiceImp implements RetailerProfileService {
             if (!additionalPhoneNumbers.matches()) {
                 throw new BadRequestException(("Opps, additional phone number cannot contain letters or symbols"));
             }
-        if(!(additionalPhone.isBlank() && additionalPhone.isBlank())) {
+        if(!(additionalPhone.isEmpty() && additionalPhone.isBlank())) {
             if (!(additionalPhone.startsWith("0") || additionalPhone.startsWith("855"))) {
                 throw new BadRequestException("Opps, please input the valid additional phone number start with ( 0 ) or (855)");
             }

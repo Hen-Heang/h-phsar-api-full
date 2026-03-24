@@ -31,7 +31,7 @@ public class RetailerReportController {
     }
 
     @Operation(summary = "Get retailer report")
-    @GetMapping("/")
+    @GetMapping
     public ResponseEntity<?> getRetailerMonthlyReport(
             @RequestParam(defaultValue = "yyyy-mm") String startDate,
             @RequestParam(defaultValue = "yyyy-mm") String endDate

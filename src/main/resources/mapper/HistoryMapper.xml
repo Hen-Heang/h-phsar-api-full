@@ -60,7 +60,6 @@
         <result property="storeId"    column="storeId"/>
         <result property="retailerId" column="retailerId"/>
         <result property="date"       column="date"/>
-        <result property="statusId"   column="status_id"/>
         <association property="name"    column="retailerId"
                      select="com.henheang.hphsar.repository.RetailerProfileRepository.getRetailerNameById"/>
         <association property="image"   column="retailerId"
@@ -84,7 +83,6 @@
         <result property="storeId"    column="storeId"/>
         <result property="retailerId" column="retailerId"/>
         <result property="date"       column="date"/>
-        <result property="statusId"   column="status_id"/>
         <association property="name"    column="storeId"
                      select="com.henheang.hphsar.repository.StoreRepository.getStoreNameById"/>
         <association property="image"   column="storeId"
