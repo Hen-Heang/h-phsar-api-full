@@ -47,12 +47,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
             throw new BadRequestException("Page number and size should be higher than 0.");
         }
         // fetch order
-        List<Order> orders;
-        if (sort.equalsIgnoreCase("asc")) {
-            orders = orderDistributorRepository.getAllOrderCurrentUserSortByCreatedDateASC(pageNumber, pageSize, storeId);
-        } else {
-            orders = orderDistributorRepository.getAllOrderCurrentUserSortByCreatedDateDESC(pageNumber, pageSize, storeId);
-        }
+        List<Order> orders = orderDistributorRepository.getAllOrders(sort, pageNumber, pageSize, storeId);
         // find total order
         Integer totalOrder = getTotalOrder(storeId);
         if (totalOrder <= 0) {
@@ -85,12 +80,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
             throw new BadRequestException("Page number and size should be higher than 0.");
         }
         // fetch order
-        List<Order> orders;
-        if (sort.equalsIgnoreCase("asc")) {
-            orders = orderDistributorRepository.getNewOrderCurrentUserSortByCreatedDateASC(pageNumber, pageSize, storeId);
-        } else {
-            orders = orderDistributorRepository.getNewOrderCurrentUserSortByCreatedDateDESC(pageNumber, pageSize, storeId);
-        }
+        List<Order> orders = orderDistributorRepository.getPendingOrders(sort, pageNumber, pageSize, storeId);
         // find total order
         Integer totalOrder = getTotalNewOrder(storeId);
         if (totalOrder <= 0) {
@@ -123,12 +113,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
             throw new BadRequestException("Page number and size should be higher than 0.");
         }
         // fetch order
-        List<Order> orders;
-        if (sort.equalsIgnoreCase("asc")) {
-            orders = orderDistributorRepository.getPreparingOrderCurrentUserSortByCreatedDateASC(pageNumber, pageSize, storeId);
-        } else {
-            orders = orderDistributorRepository.getPreparingOrderCurrentUserSortByCreatedDateDESC(pageNumber, pageSize, storeId);
-        }
+        List<Order> orders = orderDistributorRepository.getPreparingOrders(sort, pageNumber, pageSize, storeId);
         // find total order
         Integer totalOrder = getTotalPreparingOrder(storeId);
         if (totalOrder <= 0) {
@@ -161,12 +146,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
             throw new BadRequestException("Page number and size should be higher than 0.");
         }
         // fetch order
-        List<Order> orders;
-        if (sort.equalsIgnoreCase("asc")) {
-            orders = orderDistributorRepository.getDispatchingOrderCurrentUserSortByCreatedDateASC(pageNumber, pageSize, storeId);
-        } else {
-            orders = orderDistributorRepository.getDispatchingOrderCurrentUserSortByCreatedDateDESC(pageNumber, pageSize, storeId);
-        }
+        List<Order> orders = orderDistributorRepository.getDispatchingOrders(sort, pageNumber, pageSize, storeId);
         // find total order
         Integer totalOrder = getTotalDispatchingOrder(storeId);
         if (totalOrder <= 0) {
@@ -199,12 +179,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
             throw new BadRequestException("Page number and size should be higher than 0.");
         }
         // fetch order
-        List<Order> orders;
-        if (sort.equalsIgnoreCase("asc")) {
-            orders = orderDistributorRepository.getConfirmingOrderCurrentUserSortByCreatedDateASC(pageNumber, pageSize, storeId);
-        } else {
-            orders = orderDistributorRepository.getConfirmingOrderCurrentUserSortByCreatedDateDESC(pageNumber, pageSize, storeId);
-        }
+        List<Order> orders = orderDistributorRepository.getConfirmingOrders(sort, pageNumber, pageSize, storeId);
         // find total order
         Integer totalOrder = getTotalConfirmingOrder(storeId);
         if (totalOrder <= 0) {
@@ -237,12 +212,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
             throw new BadRequestException("Page number and size should be higher than 0.");
         }
         // fetch order
-        List<Order> orders;
-        if (sort.equalsIgnoreCase("asc")) {
-            orders = orderDistributorRepository.getCompleteOrderCurrentUserSortByCreatedDateASC(pageNumber, pageSize, storeId);
-        } else {
-            orders = orderDistributorRepository.getCompleteOrderCurrentUserSortByCreatedDateDESC(pageNumber, pageSize, storeId);
-        }
+        List<Order> orders = orderDistributorRepository.getCompleteOrders(sort, pageNumber, pageSize, storeId);
         // find total order
         Integer totalOrder = getTotalCompleteOrder(storeId);
         if (totalOrder <= 0) {
@@ -364,7 +334,7 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
     private boolean checkAvailableProduct(Integer orderId) {
         // count how many order detail product qty is <= store product detail qty. eligible mean meet requirement
         Integer eligibleCount = orderDistributorRepository.productEligibleCount(orderId);
-        // Select all product from product detail by order id
+        // Select all products from product detail by order id
         Integer productDetailCount = orderDistributorRepository.getProductDetailCount(orderId);
         // if eligibleCount != productDetailCount return false
         return Objects.equals(eligibleCount, productDetailCount);
@@ -434,9 +404,9 @@ public class OrderDistributorServiceImplV1 implements OrderDistributorService {
         if (!Objects.equals(confirm, "1")) {
             throw new InternalServerErrorException("Fail to update order.");
         }
-        // create confirming notification / order arrived
+        // create completion notification — order is done, no retailer confirmation needed
         OrderDetail orderDetail = orderDistributorRepository.getOrderDetailsByOrderId(orderId);
-        Integer delivering = notificationRepository.createRetailerNotification(orderDetail.getOrder().getRetailerId(), 8, orderDetail.getOrder().getId(), "Your order #" + orderDetail.getOrder().getId() + " at store "+ orderDetail.getOrder().getStoreName()+" has arrived.", "Order has arrived.", "Your order #" + orderDetail.getOrder().getId() + " at store "+ orderDetail.getOrder().getStoreName() + " has arrived. Please confirm that you have received your order.", false);
+        Integer delivering = notificationRepository.createRetailerNotification(orderDetail.getOrder().getRetailerId(), 9, orderDetail.getOrder().getId(), "Your order #" + orderDetail.getOrder().getId() + " at store "+ orderDetail.getOrder().getStoreName()+" is complete.", "Order complete.", "Your order #" + orderDetail.getOrder().getId() + " at store "+ orderDetail.getOrder().getStoreName() + " has been delivered and is now complete.", false);
         if (delivering == null){
             throw new InternalServerErrorException("Fail to create notification.");
         }

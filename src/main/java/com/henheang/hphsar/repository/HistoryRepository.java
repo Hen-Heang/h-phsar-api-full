@@ -12,9 +12,7 @@ import java.util.List;
 @Mapper
 public interface HistoryRepository {
 
-    List<ImportHistory> getProductImportHistoryASC(Integer pageNumber, Integer pageSize, Integer storeId);
-
-    List<ImportHistory> getProductImportHistoryDESC(Integer pageNumber, Integer pageSize, Integer storeId);
+    List<ImportHistory> getImportHistory(String sort, Integer pageNumber, Integer pageSize, Integer storeId);
 
     Integer getImportDetailQty(Integer productId, Date date, Integer storeId);
 
@@ -30,27 +28,21 @@ public interface HistoryRepository {
 
     Integer findTotalOrderHistory(Integer storeId);
 
-    List<OrderDetailHistory> getOrderHistoryASC(Integer pageNumber, Integer pageSize, Integer storeId);
+    List<OrderDetailHistory> getOrderHistory(String sort, Integer pageNumber, Integer pageSize, Integer storeId);
 
     ProductOrder getProductOrderForOrderDetail(Integer orderId);
 
     OrderHistory getOrderByOrderId(Integer orderId);
 
-    List<OrderDetailHistory> getOrderHistoryDESC(Integer pageNumber, Integer pageSize, Integer storeId);
-
     Integer findTotalRetailerOrder(Integer currentUserId);
 
-    List<OrderDetailHistory> getRetailerOrderHistoryASC(Integer pageNumber, Integer pageSize, Integer currentUserId);
-
-    List<OrderDetailHistory> getRetailerOrderHistoryDESC(Integer pageNumber, Integer pageSize, Integer currentUserId);
+    List<OrderDetailHistory> getRetailerOrderHistory(String sort, Integer pageNumber, Integer pageSize, Integer currentUserId);
 
     OrderHistory getRetailerOrderByOrderId(Integer orderId);
 
     Integer findTotalRetailerDraft(Integer currentUserId);
 
-    List<OrderDetailHistory> getRetailerDraftASC(Integer pageNumber, Integer pageSize, Integer currentUserId);
-
-    List<OrderDetailHistory> getRetailerDraftDESC(Integer pageNumber, Integer pageSize, Integer currentUserId);
+    List<OrderDetailHistory> getRetailerDraft(String sort, Integer pageNumber, Integer pageSize, Integer currentUserId);
 
     boolean checkDraftById(Integer id);
 

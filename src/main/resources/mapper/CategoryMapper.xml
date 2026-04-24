@@ -44,7 +44,7 @@
         <!--
             <association> for single-value nested selects:
             - column="category_id" → passes the category_id value to the sub-select
-            - select="..."         → the sub-select method that returns the value
+            - select="..." → the sub-select method that returns the value
         -->
         <association property="name"        column="category_id" select="getCategoryNameById"/>
         <association property="createdDate" column="category_id" select="getCategoryCreatedDateById"/>

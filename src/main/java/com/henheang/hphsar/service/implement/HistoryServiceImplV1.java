@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -49,12 +48,7 @@ public class HistoryServiceImplV1 implements HistoryService {
             throw new NotFoundException("Page number and size should be higher than 0.");
         }
         Integer totalPage = findTotalImportPage(pageSize);
-        List<ImportHistory> histories = new ArrayList<>();
-        if (sort.equalsIgnoreCase("asc")) {
-            histories = historyRepository.getProductImportHistoryASC(pageNumber, pageSize, storeId);
-        } else {
-            histories = historyRepository.getProductImportHistoryDESC(pageNumber, pageSize, storeId);
-        }
+        List<ImportHistory> histories = historyRepository.getImportHistory(sort, pageNumber, pageSize, storeId);
         if (totalPage < pageSize * pageNumber && histories.isEmpty()) {
             throw new NotFoundException("Out of range. Total page is " + totalPage);
         }
@@ -73,12 +67,7 @@ public class HistoryServiceImplV1 implements HistoryService {
         }
         Integer storeId = storeRepository.getStoreIdByUserId(currentUserId);
         Integer totalOrderHistory = historyRepository.findTotalOrderHistory(storeId);
-        List<OrderDetailHistory> orderDetails;
-        if (sort.equalsIgnoreCase("asc")) {
-            orderDetails = historyRepository.getOrderHistoryASC(pageNumber, pageSize, storeId);
-        } else {
-            orderDetails = historyRepository.getOrderHistoryDESC(pageNumber, pageSize, storeId);
-        }
+        List<OrderDetailHistory> orderDetails = historyRepository.getOrderHistory(sort, pageNumber, pageSize, storeId);
         if (totalOrderHistory < pageSize * pageNumber && orderDetails.isEmpty()) {
             throw new NotFoundException("Out of range. Total page is " + totalOrderHistory);
         }
@@ -96,12 +85,7 @@ public class HistoryServiceImplV1 implements HistoryService {
             throw new NotFoundException("User have not created profile yet. Please create user profile to use this feature.");
         }
         Integer totalOrderHistory = historyRepository.findTotalRetailerOrder(currentUserId);
-        List<OrderDetailHistory> orderDetails;
-        if (sort.equalsIgnoreCase("asc")) {
-            orderDetails = historyRepository.getRetailerOrderHistoryASC(pageNumber, pageSize, currentUserId);
-        } else {
-            orderDetails = historyRepository.getRetailerOrderHistoryDESC(pageNumber, pageSize, currentUserId);
-        }
+        List<OrderDetailHistory> orderDetails = historyRepository.getRetailerOrderHistory(sort, pageNumber, pageSize, currentUserId);
         if (totalOrderHistory < pageSize * pageNumber && orderDetails.isEmpty()) {
             throw new NotFoundException("Out of range. Total page is " + totalOrderHistory);
         }
@@ -119,12 +103,7 @@ public class HistoryServiceImplV1 implements HistoryService {
             throw new NotFoundException("User have not created profile yet. Please create user profile to use this feature.");
         }
         Integer totalRetailerDraftPage = historyRepository.findTotalRetailerDraft(currentUserId);
-        List<OrderDetailHistory> orderDetails;
-        if (sort.equalsIgnoreCase("asc")) {
-            orderDetails = historyRepository.getRetailerDraftASC(pageNumber, pageSize, currentUserId);
-        } else {
-            orderDetails = historyRepository.getRetailerDraftDESC(pageNumber, pageSize, currentUserId);
-        }
+        List<OrderDetailHistory> orderDetails = historyRepository.getRetailerDraft(sort, pageNumber, pageSize, currentUserId);
         if (totalRetailerDraftPage < pageSize * pageNumber && orderDetails.isEmpty()) {
             throw new NotFoundException("Out of range. Total page is " + totalRetailerDraftPage);
         }

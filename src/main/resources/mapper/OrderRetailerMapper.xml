@@ -100,6 +100,25 @@
                      select="com.henheang.hphsar.repository.StoreRepository.getAdditionalPhone"/>
     </resultMap>
 
+    <!-- ─── SQL FRAGMENTS ────────────────────────────────────────────────────── -->
+
+    <sql id="selectOrderBase">
+        SELECT id, store_id AS storeId, retailer_account_id AS retailerId, created_date AS date, status_id
+        FROM tb_order
+    </sql>
+
+    <sql id="orderByDate">
+        ORDER BY created_date
+        <choose>
+            <when test="sort != null and sort.equalsIgnoreCase('asc')">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </sql>
+
+    <sql id="paginate">
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </sql>
+
     <!-- ─── HELPER: get single order by id ───────────────────────────────────── -->
 
     <select id="getOrderByOrderId" resultMap="OrderResultMap">
@@ -255,20 +274,11 @@
          status_id IN (1,2,3,4,5,6) → all active and completed/rejected orders
     -->
 
-    <select id="getUserOrderActivitiesOrderByDateASC" resultMap="OrderResultMap">
-        SELECT id, store_id AS storeId, retailer_account_id AS retailerId, created_date AS date, status_id
-        FROM tb_order
+    <select id="getUserOrderActivities" resultMap="OrderResultMap">
+        <include refid="selectOrderBase"/>
         WHERE retailer_account_id = #{retailerId} AND status_id IN (1, 2, 3, 4, 5, 6)
-        ORDER BY created_date ASC
-        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
-    </select>
-
-    <select id="getUserOrderActivitiesOrderByDateDESC" resultMap="OrderResultMap">
-        SELECT id, store_id AS storeId, retailer_account_id AS retailerId, created_date AS date, status_id
-        FROM tb_order
-        WHERE retailer_account_id = #{retailerId} AND status_id IN (1, 2, 3, 4, 5, 6)
-        ORDER BY created_date DESC
-        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+        <include refid="orderByDate"/>
+        <include refid="paginate"/>
     </select>
 
     <select id="getTotalOrder" resultType="int">

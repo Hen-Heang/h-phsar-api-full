@@ -6,12 +6,9 @@ import com.henheang.hphsar.exception.BadRequestException;
 import com.henheang.hphsar.service.OtpService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import com.henheang.hphsar.common.api.ApiResponse;
+
 /**
  * OTPController — OTP Endpoints
  * <p>
@@ -20,7 +17,7 @@ import com.henheang.hphsar.common.api.ApiResponse;
  * <p>
  * Endpoints:
  *   POST /authorization/api/v1/otp/generate → send OTP code to email
- *   POST /authorization/api/v1/otp/verify   → verify OTP code and activate account
+ *   POST /authorization/api/v1/otp/verify → verify OTP code and activate an account
  */
 @RestController
 @CrossOrigin(origins = "*")
@@ -57,7 +54,7 @@ public class OTPController extends BaseController {
      *   1. Validate OTP is within Integer range
      *   2. Load user + latest OTP from DB
      *   3. Validate: email matches, code matches, not expired (< 3 min)
-     *   4. Mark account as verified in DB (is_verified = true)
+     *   4. Mark the account as verified in DB (is_verified = true)
      *   5. FIX 3: Delete OTP from DB after successful use
      */
     @PostMapping("/verify")

@@ -47,9 +47,7 @@ public interface OrderRetailerRepository {
 
     String confirmOrder(Integer orderId);
 
-    List<Order> getUserOrderActivitiesOrderByDateASC(Integer retailerId, Integer pageNumber, Integer pageSize);
-
-    List<Order> getUserOrderActivitiesOrderByDateDESC(Integer retailerId, Integer pageNumber, Integer pageSize);
+    List<Order> getUserOrderActivities(String sort, Integer retailerId, Integer pageNumber, Integer pageSize);
 
     Integer getTotalOrder(Integer retailerId);
 

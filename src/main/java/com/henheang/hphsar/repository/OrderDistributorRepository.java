@@ -11,29 +11,17 @@ import java.util.List;
 @Mapper
 public interface OrderDistributorRepository {
 
-    List<Order> getAllOrderCurrentUserSortByCreatedDateASC(Integer pageNumber, Integer pageSize, Integer storeId);
+    List<Order> getAllOrders(String sort, Integer pageNumber, Integer pageSize, Integer storeId);
 
-    List<Order> getAllOrderCurrentUserSortByCreatedDateDESC(Integer pageNumber, Integer pageSize, Integer storeId);
+    List<Order> getPendingOrders(String sort, Integer pageNumber, Integer pageSize, Integer storeId);
 
-    List<Order> getNewOrderCurrentUserSortByCreatedDateASC(Integer pageNumber, Integer pageSize, Integer storeId);
+    List<Order> getPreparingOrders(String sort, Integer pageNumber, Integer pageSize, Integer storeId);
 
-    List<Order> getNewOrderCurrentUserSortByCreatedDateDESC(Integer pageNumber, Integer pageSize, Integer storeId);
+    List<Order> getDispatchingOrders(String sort, Integer pageNumber, Integer pageSize, Integer storeId);
 
-    List<Order> getPreparingOrderCurrentUserSortByCreatedDateASC(Integer pageNumber, Integer pageSize, Integer storeId);
+    List<Order> getConfirmingOrders(String sort, Integer pageNumber, Integer pageSize, Integer storeId);
 
-    List<Order> getPreparingOrderCurrentUserSortByCreatedDateDESC(Integer pageNumber, Integer pageSize, Integer storeId);
-
-    List<Order> getDispatchingOrderCurrentUserSortByCreatedDateASC(Integer pageNumber, Integer pageSize, Integer storeId);
-
-    List<Order> getDispatchingOrderCurrentUserSortByCreatedDateDESC(Integer pageNumber, Integer pageSize, Integer storeId);
-
-    List<Order> getConfirmingOrderCurrentUserSortByCreatedDateASC(Integer pageNumber, Integer pageSize, Integer storeId);
-
-    List<Order> getConfirmingOrderCurrentUserSortByCreatedDateDESC(Integer pageNumber, Integer pageSize, Integer storeId);
-
-    List<Order> getCompleteOrderCurrentUserSortByCreatedDateASC(Integer pageNumber, Integer pageSize, Integer storeId);
-
-    List<Order> getCompleteOrderCurrentUserSortByCreatedDateDESC(Integer pageNumber, Integer pageSize, Integer storeId);
+    List<Order> getCompleteOrders(String sort, Integer pageNumber, Integer pageSize, Integer storeId);
 
     Integer getCurrentStoreTotalPreparingOrder(Integer storeId);
 
@@ -68,8 +56,6 @@ public interface OrderDistributorRepository {
     String orderDelivered(Integer orderId);
 
     OrderDetail getOrderDetailsByOrderId(Integer id);
-
-    ProductOrder getProductOrder(Integer orderId);
 
     ProductOrder getProductOrderForOrderDetail(Integer orderId);
 

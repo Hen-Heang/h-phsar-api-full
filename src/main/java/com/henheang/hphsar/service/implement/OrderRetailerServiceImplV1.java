@@ -299,12 +299,7 @@ public class OrderRetailerServiceImplV1 implements OrderRetailerService {
         if (pageNumber <= 0 || pageSize <= 0) {
             throw new BadRequestException("Page number and size should be higher than 0.");
         }
-        List<Order> orders;
-        if (sort.equalsIgnoreCase("asc")) {
-            orders = orderRetailerRepository.getUserOrderActivitiesOrderByDateASC(retailerId, pageNumber, pageSize);
-        } else {
-            orders = orderRetailerRepository.getUserOrderActivitiesOrderByDateDESC(retailerId, pageNumber, pageSize);
-        }
+        List<Order> orders = orderRetailerRepository.getUserOrderActivities(sort, retailerId, pageNumber, pageSize);
         Integer totalOrder = orderRetailerRepository.getTotalOrder(retailerId);
         if (totalOrder <= 0) {
             throw new NotFoundException("There is no order currently.");

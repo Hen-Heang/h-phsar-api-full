@@ -203,6 +203,7 @@ CREATE TABLE IF NOT EXISTS tb_distributor_notification (
                                                            id                SERIAL PRIMARY KEY,
                                                            distributor_id    INTEGER NOT NULL REFERENCES tb_distributor_account (id) ON DELETE CASCADE,
     type_id           INTEGER NOT NULL REFERENCES tb_notification_type (id),
+    order_id          INTEGER,
     content           TEXT,
     is_read           BOOLEAN DEFAULT FALSE,
     created_date      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -212,6 +213,7 @@ CREATE TABLE IF NOT EXISTS tb_retailer_notification (
                                                         id             SERIAL PRIMARY KEY,
                                                         retailer_id    INTEGER NOT NULL REFERENCES tb_retailer_account (id) ON DELETE CASCADE,
     type_id        INTEGER NOT NULL REFERENCES tb_notification_type (id),
+    order_id       INTEGER,
     content        TEXT,
     is_read        BOOLEAN DEFAULT FALSE,
     created_date   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -249,3 +251,15 @@ INSERT INTO tb_status (id, name) VALUES
                                      (8, 'REJECTED'),
                                      (9, 'DRAFT')
     ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO tb_notification_type (id, name, template) VALUES
+    (1, 'Order Received',    NULL),
+    (2, 'Out of Stock',      NULL),
+    (3, 'New Order',         NULL),
+    (4, 'Order Accepted',    NULL),
+    (5, 'Order Declined',    NULL),
+    (6, 'Order Preparing',   NULL),
+    (7, 'Order Dispatching', NULL),
+    (8, 'Order Arrived',     NULL),
+    (9, 'Order Complete',    NULL)
+ON CONFLICT (id) DO NOTHING;

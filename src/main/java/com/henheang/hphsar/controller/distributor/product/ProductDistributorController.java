@@ -150,11 +150,13 @@ public class ProductDistributorController  extends BaseController {
         if (pageNumber > 2147483646 || pageSize > 2147483646){
             throw new BadRequestException("Integer value can not exceed 2147483646");
         }
+        Integer totalElements = productDistributorService.getTotalElements();
         PaginationApiResponse<List<Product>> response = PaginationApiResponse.<List<Product>>builder()
                 .status(HttpStatus.OK.value())
                 .message("Fetched successfully.")
                 .data(productDistributorService.getAllProductBySorting(sort, by, pageNumber, pageSize))
                 .totalPage(productDistributorService.getTotalPage(pageSize))
+                .totalElements(totalElements)
                 .date(formatter.format(new Date()))
                 .build();
         return ResponseEntity.ok(response);

@@ -355,9 +355,11 @@ public class ProductDistributorServiceImp implements ProductDistributorService {
         }
         Integer storeId = categoryRepository.getStoreIdByCurrentUserId(currentUserId);
         by = by.toLowerCase().trim();
-        if (!(by.equals("createddate") || by.equals("qty") || by.equals("name") || by.equals("price") || by.equals("product_id"))){
-            throw new BadRequestException("Invalid input. Available sorting are 'createdDate' - 'qty' - 'name' - 'price' - 'product_id'. Case sensitive not needed.");
+        if (!(by.equals("created_date") || by.equals("qty") || by.equals("name") || by.equals("price") || by.equals("product_id"))){
+            throw new BadRequestException("Invalid input. Available sorting are 'created_date' - 'qty' - 'name' - 'price' - 'product_id'. Case sensitive not needed.");
         }
+        // created_date exists in both joined tables — qualify with the product table alias to avoid ambiguity
+        if (by.equals("created_date")) by = "b.created_date";
         // get all product
         List<Product> products;
         if (Objects.equals(sort.toLowerCase().trim(), "asc")) {
@@ -368,7 +370,7 @@ public class ProductDistributorServiceImp implements ProductDistributorService {
             throw new BadRequestException("Sort can only be 'ASC' or 'DESC'. Case sensitive not needed.");
         }
         if (products.isEmpty()) {
-            throw new BadRequestException("Product not found.");
+            return new ArrayList<>();
         }
         return getProducts(products, formatter);
     }
@@ -389,6 +391,17 @@ public class ProductDistributorServiceImp implements ProductDistributorService {
             totalPage = (totalProduct / pageSize) + 1;
         }
         return totalPage;
+    }
+
+    @Override
+    public Integer getTotalElements() {
+        AppUser appUser = (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Integer currentUserId = appUser.getId();
+        if (storeRepository.checkStoreIfCreated(currentUserId) != 1) {
+            return 0;
+        }
+        Integer storeId = categoryRepository.getStoreIdByCurrentUserId(currentUserId);
+        return productDistributorRepository.getAllProduct(storeId);
     }
 
     @Override
@@ -414,14 +427,19 @@ public class ProductDistributorServiceImp implements ProductDistributorService {
                 throw new NotFoundException("This product does not exist in this store. Please confirm your product id. Fail on count " + count);
             }
             Integer categoryId = categoryRepository.getCategoryIdByProductId(productImport.getId());
-            // price can't be 0
-            if (productImport.getPrice() == 0){
-                throw new BadRequestException("Price can't be 0. Recommend un-list this product. Fail on count " + count);
+            // if price not provided in request, keep the existing product price
+            Double price = productImport.getPrice();
+            if (price == null || price == 0) {
+                Product existing = productDistributorRepository.getProductById(storeId, productImport.getId());
+                price = (existing != null && existing.getPrice() != null) ? existing.getPrice() : null;
+                if (price == null || price == 0) {
+                    throw new BadRequestException("Price can't be 0. Recommend un-list this product. Fail on count " + count);
+                }
             }
             // insert product to import detail
-            productDistributorRepository.insertImportDetail(importId, productId, productImport.getQty(), productImport.getPrice(), categoryId);
+            productDistributorRepository.insertImportDetail(importId, productId, productImport.getQty(), price, categoryId);
             // update store product
-            productDistributorRepository.updateStoreProductDetail(storeId, productImport.getId(), productImport.getQty(), productImport.getPrice(), true);
+            productDistributorRepository.updateStoreProductDetail(storeId, productImport.getId(), productImport.getQty(), price, true);
             Product product = productDistributorRepository.getProductById(storeId, productImport.getId());
             products.add(product);
             count ++;

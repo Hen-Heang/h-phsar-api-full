@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head th:replace="~{fragments/layout :: head}">
+  <title>Register | H-Phsar</title>
+</head>
+<body>
+
+<div class="login-page">
+
+  <!-- ── Left panel (form) ── -->
+  <div class="login-side" style="width:480px;">
+
+    <div style="margin-bottom: 28px; text-align: center;">
+      <div class="brand-logo mx-auto mb-3"
+           style="width:48px;height:48px;font-size:22px;background:#3b82f6;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;">
+        H
+      </div>
+      <h1 class="login-title">Create your account</h1>
+      <p class="login-subtitle">Join H-Phsar as a Distributor or Retailer</p>
+    </div>
+
+    <!-- Step indicator -->
+    <div class="d-flex align-items-center mb-4 w-100" style="gap:8px;">
+      <div class="step-dot active" id="step-dot-1">1</div>
+      <div class="step-line" id="step-line-1"></div>
+      <div class="step-dot" id="step-dot-2">2</div>
+      <div class="step-line" id="step-line-2"></div>
+      <div class="step-dot" id="step-dot-3">3</div>
+    </div>
+
+    <!-- ── Step 1: Account credentials ── -->
+    <div id="step-1" class="w-100">
+      <p class="fw-semibold mb-3" style="font-size:15px;">Step 1 — Account Credentials</p>
+      <div class="mb-3">
+        <label class="form-label">Email address *</label>
+        <input type="email" id="reg-email" class="form-control" placeholder="you@example.com"/>
+        <div class="invalid-feedback" id="err-email"></div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Password *</label>
+        <div class="position-relative">
+          <label for="reg-password"></label><input type="password" id="reg-password" class="form-control" placeholder="Min. 6 characters"/>
+          <button type="button"
+                  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9ca3af;cursor:pointer;"
+                  onclick="togglePwd('reg-password','eye-1')">
+            <i class="bi bi-eye" id="eye-1"></i>
+          </button>
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Confirm Password *</label>
+        <div class="position-relative">
+          <label for="reg-confirm"></label><input type="password" id="reg-confirm" class="form-control" placeholder="Repeat password"/>
+          <button type="button"
+                  style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9ca3af;cursor:pointer;"
+                  onclick="togglePwd('reg-confirm','eye-2')">
+            <i class="bi bi-eye" id="eye-2"></i>
+          </button>
+        </div>
+        <div class="invalid-feedback" id="err-confirm"></div>
+      </div>
+      <button class="btn-primary-custom w-100 justify-content-center" onclick="goStep2()">
+        Continue <i class="bi bi-arrow-right ms-1"></i>
+      </button>
+    </div>
+
+    <!-- ── Step 2: Select role ── -->
+    <div id="step-2" class="w-100 d-none">
+      <p class="fw-semibold mb-3" style="font-size:15px;">Step 2 — Select Your Role</p>
+      <div class="row g-3 mb-4">
+        <div class="col-6">
+          <div class="role-card" id="role-dist" onclick="selectRole(1)">
+            <div style="font-size:36px;margin-bottom:10px;">🚛</div>
+            <div class="fw-bold mb-1">Distributor</div>
+            <div style="font-size:12px;color:#6b7280;">Sell products wholesale to retailers</div>
+          </div>
+        </div>
+        <div class="col-6">
+          <div class="role-card" id="role-ret" onclick="selectRole(2)">
+            <div style="font-size:36px;margin-bottom:10px;">🏪</div>
+            <div class="fw-bold mb-1">Retailer</div>
+            <div style="font-size:12px;color:#6b7280;">Browse and order from distributors</div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button class="btn btn-light flex-fill" onclick="goStep1()">
+          <i class="bi bi-arrow-left me-1"></i> Back
+        </button>
+        <button class="btn-primary-custom flex-fill justify-content-center" onclick="goStep3()">
+          Continue <i class="bi bi-arrow-right ms-1"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Step 3: OTP verify ── -->
+    <div id="step-3" class="w-100 d-none">
+      <p class="fw-semibold mb-1" style="font-size:15px;">Step 3 — Verify your email</p>
+      <p class="text-muted mb-4" style="font-size:13px;">
+        We sent a 6-digit OTP to <span id="otp-email-label" class="fw-semibold text-dark"></span>.
+        Check your inbox.
+      </p>
+      <div class="mb-4">
+        <label class="form-label">Enter OTP *</label>
+        <input type="text" id="otp-input" class="form-control text-center fw-bold"
+               maxlength="6" placeholder="— — — — — —"
+               style="letter-spacing:8px;font-size:20px;" oninput="autoVerify(this)"/>
+      </div>
+
+      <button class="btn-primary-custom w-100 justify-content-center mb-3" onclick="handleVerifyOtp()">
+        <span id="otp-spinner" class="spinner-border spinner-border-sm d-none"></span>
+        <i class="bi bi-shield-check me-1"></i> Verify &amp; Activate
+      </button>
+
+      <div class="text-center" style="font-size:13px;color:#9ca3af;">
+        Didn't receive it?
+        <a href="#" onclick="resendOtp()" style="color:#3b82f6;text-decoration:none;font-weight:500;" id="resend-link">Resend OTP</a>
+        <span id="resend-timer"></span>
+      </div>
+
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn btn-light w-100" onclick="goStep2()">
+          <i class="bi bi-arrow-left me-1"></i> Back
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Success ── -->
+    <div id="step-success" class="w-100 d-none text-center">
+      <div style="font-size:64px;margin-bottom:16px;">🎉</div>
+      <h5 class="fw-bold mb-2">Account Activated!</h5>
+      <p class="text-muted mb-4" style="font-size:14px;">
+        Your account is ready. You can now log in.
+      </p>
+      <a th:href="@{/web/login}" class="btn-primary-custom justify-content-center"
+         style="text-decoration:none;">
+        <i class="bi bi-box-arrow-in-right me-1"></i> Go to Login
+      </a>
+    </div>
+
+    <p style="font-size:13px;color:#9ca3af;text-align:center;margin-top:28px;">
+      Already have an account?
+      <a th:href="@{/web/login}" style="color:#3b82f6;text-decoration:none;font-weight:500;">Sign In</a>
+    </p>
+  </div>
+
+  <!-- ── Right panel ── -->
+  <div class="login-illustration">
+    <div style="text-align:center;color:rgba(255,255,255,0.85);max-width:400px;">
+      <div style="font-size:90px;margin-bottom:24px;">🤝</div>
+      <h2 style="font-size:26px;font-weight:700;margin-bottom:12px;">
+        Connect Distributors<br/>with Retailers
+      </h2>
+      <p style="font-size:15px;opacity:0.7;line-height:1.6;">
+        H-Phsar makes wholesale operations seamless — manage products, orders, and your network all in one platform.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:12px;margin-top:32px;text-align:left;">
+        <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.1);padding:12px 16px;border-radius:10px;">
+          <span style="font-size:22px;">✅</span>
+          <span style="font-size:14px;">Free to register as Distributor or Retailer</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.1);padding:12px 16px;border-radius:10px;">
+          <span style="font-size:22px;">🔒</span>
+          <span style="font-size:14px;">Secured with JWT authentication</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.1);padding:12px 16px;border-radius:10px;">
+          <span style="font-size:22px;">📦</span>
+          <span style="font-size:14px;">Real-time order tracking and notifications</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<style>
+.step-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: #e5e7eb; color: #9ca3af;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; flex-shrink: 0;
+  transition: all 0.2s;
+}
+.step-dot.active   { background: #3b82f6; color: #fff; }
+.step-dot.done     { background: #10b981; color: #fff; }
+.step-line {
+  flex: 1; height: 2px; background: #e5e7eb;
+  transition: background 0.3s;
+}
+.step-line.done { background: #10b981; }
+
+.role-card {
+  border: 2px solid #e5e7eb; border-radius: 12px;
+  padding: 20px 12px; text-align: center; cursor: pointer;
+  transition: all 0.15s;
+}
+.role-card:hover   { border-color: #3b82f6; background: rgba(59,130,246,0.04); }
+.role-card.selected { border-color: #3b82f6; background: rgba(59,130,246,0.08); }
+</style>
+
+<div th:replace="~{fragments/layout :: scripts}"></div>
+<script>
+  let selectedRoleId = null;
+  let resendCountdown = null;
+
+  // ── Step navigation ──────────────────────────────────────────
+  function setStep(n) {
+    [1,2,3].forEach(i => document.getElementById(`step-${i}`).classList.add('d-none'));
+    document.getElementById(`step-${n}`)?.classList.remove('d-none');
+
+    // Update step dots
+    [1,2,3].forEach(i => {
+      const dot  = document.getElementById(`step-dot-${i}`);
+      const line = document.getElementById(`step-line-${i}`);
+      dot.classList.remove('active','done');
+      if (line) line.classList.remove('done');
+      if (i < n)  { dot.classList.add('done');  if (line) line.classList.add('done'); }
+      if (i === n) dot.classList.add('active');
+    });
+
+  }
+
+  function goStep1() { setStep(1); }
+
+  function goStep2() {
+    const email    = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const confirm  = document.getElementById('reg-confirm').value;
+
+    let valid = true;
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showErr('reg-email','err-email','Enter a valid email address.'); valid = false;
+    } else clearErr('reg-email','err-email');
+
+    if (password.length < 6) {
+      document.getElementById('reg-password').classList.add('is-invalid'); valid = false;
+    } else document.getElementById('reg-password').classList.remove('is-invalid');
+
+    if (password !== confirm) {
+      showErr('reg-confirm','err-confirm','Passwords do not match.'); valid = false;
+    } else clearErr('reg-confirm','err-confirm');
+
+    if (valid) setStep(2);
+  }
+
+  async function goStep3() {
+    if (!selectedRoleId) { toast('Please select a role.', 'error'); return; }
+    const email    = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    try {
+      await api.post('/authorization/register', { email, password, roleId: selectedRoleId });
+      // Send OTP
+      await api.post(`/authorization/api/v1/otp/generate?email=${encodeURIComponent(email)}`);
+      document.getElementById('otp-email-label').textContent = email;
+      setStep(3);
+      startResendTimer();
+    } catch (err) {
+      toast(err?.message || 'Registration failed.', 'error');
+    }
+  }
+
+  // ── Role selection ───────────────────────────────────────────
+  function selectRole(id) {
+    selectedRoleId = id;
+    document.getElementById('role-dist').classList.toggle('selected', id === 1);
+    document.getElementById('role-ret').classList.toggle('selected',  id === 2);
+  }
+
+  // ── OTP ──────────────────────────────────────────────────────
+  function autoVerify(input) {
+    if (input.value.length === 6) handleVerifyOtp();
+  }
+
+  async function handleVerifyOtp() {
+    const otp   = document.getElementById('otp-input').value.trim();
+    const email = document.getElementById('reg-email').value.trim();
+    if (otp.length < 4) { toast('Enter the OTP from your email.', 'error'); return; }
+
+    const spinner = document.getElementById('otp-spinner');
+    spinner.classList.remove('d-none');
+    try {
+      await api.post(`/authorization/api/v1/otp/verify?otp=${otp}&email=${encodeURIComponent(email)}`);
+      // Show success screen
+      [1,2,3].forEach(i => document.getElementById(`step-${i}`)?.classList.add('d-none'));
+      document.getElementById('step-success').classList.remove('d-none');
+      [1,2,3].forEach(i => {
+        document.getElementById(`step-dot-${i}`).classList.add('done');
+        document.getElementById(`step-line-${i}`)?.classList.add('done');
+      });
+    } catch (err) {
+      toast(err?.message || 'Invalid OTP. Try again.', 'error');
+    } finally { spinner.classList.add('d-none'); }
+  }
+
+  async function resendOtp() {
+    const email = document.getElementById('reg-email').value.trim();
+    try {
+      await api.post(`/authorization/api/v1/otp/generate?email=${encodeURIComponent(email)}`);
+      toast('OTP resent! Check your inbox.', 'success');
+      startResendTimer();
+    } catch (_) { toast('Could not resend OTP.', 'error'); }
+  }
+
+  function startResendTimer(seconds = 60) {
+    const link  = document.getElementById('resend-link');
+    const timer = document.getElementById('resend-timer');
+    link.style.pointerEvents = 'none'; link.style.opacity = '0.4';
+    let remaining = seconds;
+    clearInterval(resendCountdown);
+    resendCountdown = setInterval(() => {
+      timer.textContent = ` (${remaining}s)`;
+      remaining--;
+      if (remaining < 0) {
+        clearInterval(resendCountdown);
+        link.style.pointerEvents = ''; link.style.opacity = '';
+        timer.textContent = '';
+      }
+    }, 1000);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────
+  function togglePwd(inputId, eyeId) {
+    const inp = document.getElementById(inputId);
+    const eye = document.getElementById(eyeId);
+    if (inp.type === 'password') { inp.type = 'text';     eye.className = 'bi bi-eye-slash'; }
+    else                         { inp.type = 'password'; eye.className = 'bi bi-eye'; }
+  }
+
+  function showErr(inputId, errId, msg) {
+    document.getElementById(inputId).classList.add('is-invalid');
+    const el = document.getElementById(errId);
+    if (el) { el.textContent = msg; el.style.display = 'block'; }
+  }
+  function clearErr(inputId, errId) {
+    document.getElementById(inputId).classList.remove('is-invalid');
+    const el = document.getElementById(errId);
+    if (el) el.style.display = 'none';
+  }
+</script>
+</body>
+</html>

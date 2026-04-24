@@ -9,8 +9,8 @@
     Handles product import history and order history for both distributors and retailers.
 
     Key result maps:
-    - ImportHistoryResultMap      → for product import history rows
-    - OrderHistoryResultMap       → for a single order summary (used inside OrderDetailHistory)
+    - ImportHistoryResultMap → for product import history rows
+    - OrderHistoryResultMap → for a single order summary (used inside OrderDetailHistory)
     - RetailerOrderHistoryResultMap → same but uses store name/image instead of retailer name/image
     - OrderDetailHistoryResultMap → wraps OrderHistory + List<ProductOrder>
 -->
@@ -21,7 +21,7 @@
         RESULT MAP — ImportHistory
         ═══════════════════════════
         All columns are already aliased in the query to match Java field names.
-        Auto-mapping handles this, but explicit map is clearer.
+        Auto-mapping handles this, but the explicit map is clearer.
     -->
     <resultMap id="ImportHistoryResultMap" type="com.henheang.hphsar.model.history.ImportHistory">
         <id     property="id"       column="id"/>
@@ -76,7 +76,7 @@
         RESULT MAP — OrderHistory (for retailer view)
         ══════════════════════════════════════════════
         Retailer sees: store name, store image, retailer address, order total, status.
-        Different from distributor view — uses store name/image instead of retailer name/image.
+        Different from the distributor view — uses store name/image instead of retailer name/image.
     -->
     <resultMap id="RetailerOrderHistoryResultMap" type="com.henheang.hphsar.model.history.OrderHistory">
         <id     property="id"         column="id"/>
@@ -99,14 +99,13 @@
         RESULT MAP — OrderDetailHistory (distributor)
         ═══════════════════════════════════════════════
         Contains:
-        - order   → OrderHistory object (from getOrderByOrderId sub-select)
+        - order → OrderHistory object (from getOrderByOrderId sub-select)
         - products → List<ProductOrder> (from getProductOrderForOrderDetail sub-select)
 
         <association> for single nested object (order)
         <collection>  for list of nested objects (products)
     -->
     <resultMap id="OrderDetailHistoryResultMap" type="com.henheang.hphsar.model.history.OrderDetailHistory">
-        <id property="id" column="id"/>
         <association property="order"    column="id" select="getOrderByOrderId"/>
         <collection  property="products" column="id" select="getProductOrderForOrderDetail"/>
     </resultMap>
@@ -117,10 +116,28 @@
         Same structure but calls getRetailerOrderByOrderId instead.
     -->
     <resultMap id="RetailerOrderDetailHistoryResultMap" type="com.henheang.hphsar.model.history.OrderDetailHistory">
-        <id property="id" column="id"/>
         <association property="order"    column="id" select="getRetailerOrderByOrderId"/>
         <collection  property="products" column="id" select="getProductOrderForOrderDetail"/>
     </resultMap>
+
+    <!-- ─── SQL FRAGMENTS ────────────────────────────────────────────────────── -->
+
+    <sql id="selectOrderBase">
+        SELECT id, store_id AS storeId, retailer_account_id AS retailerId, created_date AS date, status_id
+        FROM tb_order
+    </sql>
+
+    <sql id="orderByDate">
+        ORDER BY date
+        <choose>
+            <when test="sort != null and sort.equalsIgnoreCase('asc')">ASC</when>
+            <otherwise>DESC</otherwise>
+        </choose>
+    </sql>
+
+    <sql id="paginate">
+        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+    </sql>
 
     <!-- ─── HELPER: product order line items ─────────────────────────────────── -->
 
@@ -203,7 +220,7 @@
          ═══════════════════════════════════════════════════════════════════════
     -->
 
-    <select id="getProductImportHistoryASC" resultMap="ImportHistoryResultMap">
+    <select id="getImportHistory" resultMap="ImportHistoryResultMap">
         SELECT tb_product_import_detail.product_id AS id,
                (SELECT id FROM tb_product_import WHERE id = tb_product_import_detail.product_import_id) AS importId,
                (SELECT created_date FROM tb_product_import WHERE id = tb_product_import_detail.product_import_id) AS date,
@@ -215,26 +232,8 @@
         FROM tb_product_import_detail
                  JOIN tb_product_import tpi ON tpi.id = tb_product_import_detail.product_import_id
         WHERE store_id = #{storeId}
-        ORDER BY date ASC
-        LIMIT #{pageSize}
-        OFFSET #{pageSize} * (#{pageNumber} - 1)
-    </select>
-
-    <select id="getProductImportHistoryDESC" resultMap="ImportHistoryResultMap">
-        SELECT tb_product_import_detail.product_id AS id,
-               (SELECT id FROM tb_product_import WHERE id = tb_product_import_detail.product_import_id) AS importId,
-               (SELECT created_date FROM tb_product_import WHERE id = tb_product_import_detail.product_import_id) AS date,
-               (SELECT name FROM tb_category WHERE id = (SELECT category_id FROM tb_store_product_detail WHERE id = tb_product_import_detail.product_id)) AS category,
-               (SELECT name FROM tb_product WHERE id = (SELECT product_id FROM tb_store_product_detail WHERE id = tb_product_import_detail.product_id)) AS name,
-               qty,
-               price,
-               (qty * price) AS total
-        FROM tb_product_import_detail
-                 JOIN tb_product_import tpi ON tpi.id = tb_product_import_detail.product_import_id
-        WHERE store_id = #{storeId}
-        ORDER BY date DESC
-        LIMIT #{pageSize}
-        OFFSET #{pageSize} * (#{pageNumber} - 1)
+        <include refid="orderByDate"/>
+        <include refid="paginate"/>
     </select>
 
     <select id="findTotalImportDetail" resultType="int">
@@ -256,30 +255,12 @@
           AND status_id IN (5, 6)
     </select>
 
-    <select id="getOrderHistoryASC" resultMap="OrderDetailHistoryResultMap">
-        SELECT id,
-               store_id             AS storeId,
-               retailer_account_id AS retailerId,
-               created_date        AS date,
-               status_id
-        FROM tb_order
+    <select id="getOrderHistory" resultMap="OrderDetailHistoryResultMap">
+        <include refid="selectOrderBase"/>
         WHERE store_id = #{storeId}
           AND status_id IN (5, 6)
-        ORDER BY date ASC
-        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
-    </select>
-
-    <select id="getOrderHistoryDESC" resultMap="OrderDetailHistoryResultMap">
-        SELECT id,
-               store_id             AS storeId,
-               retailer_account_id AS retailerId,
-               created_date        AS date,
-               status_id
-        FROM tb_order
-        WHERE store_id = #{storeId}
-          AND status_id IN (5, 6)
-        ORDER BY date DESC
-        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+        <include refid="orderByDate"/>
+        <include refid="paginate"/>
     </select>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
@@ -295,30 +276,12 @@
           AND status_id IN (5, 6)
     </select>
 
-    <select id="getRetailerOrderHistoryASC" resultMap="RetailerOrderDetailHistoryResultMap">
-        SELECT id,
-               store_id             AS storeId,
-               retailer_account_id AS retailerId,
-               created_date        AS date,
-               status_id
-        FROM tb_order
+    <select id="getRetailerOrderHistory" resultMap="RetailerOrderDetailHistoryResultMap">
+        <include refid="selectOrderBase"/>
         WHERE retailer_account_id = #{currentUserId}
           AND status_id IN (5, 6)
-        ORDER BY date ASC
-        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
-    </select>
-
-    <select id="getRetailerOrderHistoryDESC" resultMap="RetailerOrderDetailHistoryResultMap">
-        SELECT id,
-               store_id             AS storeId,
-               retailer_account_id AS retailerId,
-               created_date        AS date,
-               status_id
-        FROM tb_order
-        WHERE retailer_account_id = #{currentUserId}
-          AND status_id IN (5, 6)
-        ORDER BY date DESC
-        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+        <include refid="orderByDate"/>
+        <include refid="paginate"/>
     </select>
 
     <!-- ═══════════════════════════════════════════════════════════════════════
@@ -333,30 +296,12 @@
           AND status_id = 8
     </select>
 
-    <select id="getRetailerDraftASC" resultMap="RetailerOrderDetailHistoryResultMap">
-        SELECT id,
-               store_id             AS storeId,
-               retailer_account_id AS retailerId,
-               created_date        AS date,
-               status_id
-        FROM tb_order
+    <select id="getRetailerDraft" resultMap="RetailerOrderDetailHistoryResultMap">
+        <include refid="selectOrderBase"/>
         WHERE retailer_account_id = #{currentUserId}
           AND status_id IN (8)
-        ORDER BY date ASC
-        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
-    </select>
-
-    <select id="getRetailerDraftDESC" resultMap="RetailerOrderDetailHistoryResultMap">
-        SELECT id,
-               store_id             AS storeId,
-               retailer_account_id AS retailerId,
-               created_date        AS date,
-               status_id
-        FROM tb_order
-        WHERE retailer_account_id = #{currentUserId}
-          AND status_id IN (8)
-        ORDER BY date DESC
-        LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+        <include refid="orderByDate"/>
+        <include refid="paginate"/>
     </select>
 
     <select id="checkDraftById" resultType="boolean">

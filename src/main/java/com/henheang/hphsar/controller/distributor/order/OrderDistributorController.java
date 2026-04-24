@@ -126,9 +126,12 @@ public class OrderDistributorController extends BaseController {
         AppUser appUser = (AppUser) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         Integer currentUserId = appUser.getId();
         Integer storeId = storeRepository.getStoreIdByUserId(currentUserId);
-        return ok(
+        return okPage(
                 "Fetched preparing orders.",
-                orderDistributorService.getPreparingOrderCurrentUserSortByCreatedDate(sort, pageNumber, pageSize, storeId)
+                orderDistributorService.getPreparingOrderCurrentUserSortByCreatedDate(sort, pageNumber, pageSize, storeId),
+                pageNumber,
+                pageSize,
+                orderDistributorService.findTotalPage(orderDistributorService.getTotalPreparingOrder(storeId), pageSize)
         );
     }
 

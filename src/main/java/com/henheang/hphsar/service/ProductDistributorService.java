@@ -33,6 +33,8 @@ public interface ProductDistributorService {
 //
     Integer getTotalPage(Integer pageSize);
 
+    Integer getTotalElements();
+
     List<Product> importProduct(List<ProductImport> productsImport) throws ParseException;
 
 }

@@ -292,14 +292,13 @@
     </select>
 
     <select id="ratingStoreById" resultMap="StoreRatingResultMap">
-        INSERT INTO tb_rating_detail
-        VALUES (DEFAULT, #{storeId}, #{currentUser}, #{request.ratedStar}, DEFAULT, DEFAULT)
+        INSERT INTO tb_rating_detail (store_id, retailer_account_id, rated_star)
+        VALUES (#{storeId}, #{currentUser}, #{request.ratedStar})
         RETURNING id,
                   store_id            AS storeId,
                   retailer_account_id AS retailerId,
                   rated_star          AS ratedStar,
-                  created_date        AS createdDate,
-                  updated_date        AS updatedDate
+                  created_date        AS createdDate
     </select>
 
     <select id="getRatingByStoreId" resultMap="StoreRatingResultMap">
@@ -307,22 +306,20 @@
                store_id            AS storeId,
                retailer_account_id AS retailerId,
                rated_star          AS ratedStar,
-               created_date        AS createdDate,
-               updated_date        AS updatedDate
+               created_date        AS createdDate
         FROM tb_rating_detail
         WHERE store_id = #{storeId} AND retailer_account_id = #{currentUser}
     </select>
 
     <select id="editRatingByStoreId" resultMap="StoreRatingResultMap">
         UPDATE tb_rating_detail
-        SET rated_star = #{request.ratedStar}, updated_date = now()
+        SET rated_star = #{request.ratedStar}
         WHERE store_id = #{storeId} AND retailer_account_id = #{currentUser}
         RETURNING id,
                   store_id            AS storeId,
                   retailer_account_id AS retailerId,
                   rated_star          AS ratedStar,
-                  created_date        AS createdDate,
-                  updated_date        AS updatedDate
+                  created_date        AS createdDate
     </select>
 
     <select id="deleteRatingByStoreId" resultType="String">
@@ -356,7 +353,7 @@
         FROM tb_store_product_detail td
                  INNER JOIN tb_product tp ON td.product_id = tp.id
         WHERE td.store_id = #{storeId} AND td.is_publish = true
-        ORDER BY td.${by} ASC
+        ORDER BY ${by} ASC
     </select>
 
     <select id="getProductListingByStoreIdDESC" resultMap="ProductWithCategoryResultMap">
@@ -373,7 +370,7 @@
         FROM tb_store_product_detail td
                  INNER JOIN tb_product tp ON td.product_id = tp.id
         WHERE td.store_id = #{storeId} AND td.is_publish = true
-        ORDER BY td.${by} DESC
+        ORDER BY ${by} DESC
     </select>
 
     <select id="getProductListingByStoreIdAndCategoryId" resultMap="ProductWithCategoryResultMap">

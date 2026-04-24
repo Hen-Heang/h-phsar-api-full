@@ -179,8 +179,8 @@ public class RetailerStoreServiceImplV1 implements RetailerStoreService {
         if (storeRating == null) {
             throw new InternalServerErrorException("Error while editing rating.");
         }
-        storeRating.setCreatedDate(formatter.format(formatter.parse(storeRating.getCreatedDate())));
-        storeRating.setUpdatedDate(formatter.format(formatter.parse(storeRating.getUpdatedDate())));
+        if (storeRating.getCreatedDate() != null)
+            storeRating.setCreatedDate(formatter.format(formatter.parse(storeRating.getCreatedDate())));
         return storeRating;
     }
 
@@ -225,8 +225,8 @@ public class RetailerStoreServiceImplV1 implements RetailerStoreService {
         if (storeRating == null) {
             throw new InternalServerErrorException("Error while in rating operation.");
         }
-        storeRating.setCreatedDate(formatter.format(formatter.parse(storeRating.getCreatedDate())));
-        storeRating.setUpdatedDate(formatter.format(formatter.parse(storeRating.getUpdatedDate())));
+        if (storeRating.getCreatedDate() != null)
+            storeRating.setCreatedDate(formatter.format(formatter.parse(storeRating.getCreatedDate())));
         return storeRating;
     }
 
@@ -255,10 +255,16 @@ public class RetailerStoreServiceImplV1 implements RetailerStoreService {
 
     static List<Product> getProducts(List<Product> products, SimpleDateFormat formatter) throws ParseException {
         for (Product product : products) {
-            product.setCreatedDate(formatter.format(formatter.parse(product.getCreatedDate())));
-            product.setUpdatedDate(formatter.format(formatter.parse(product.getUpdatedDate())));
-            product.getCategory().setCreatedDate(formatter.format(formatter.parse(product.getCategory().getCreatedDate())));
-            product.getCategory().setUpdatedDate(formatter.format(formatter.parse(product.getCategory().getUpdatedDate())));
+            if (product.getCreatedDate() != null)
+                product.setCreatedDate(formatter.format(formatter.parse(product.getCreatedDate())));
+            if (product.getUpdatedDate() != null)
+                product.setUpdatedDate(formatter.format(formatter.parse(product.getUpdatedDate())));
+            if (product.getCategory() != null) {
+                if (product.getCategory().getCreatedDate() != null)
+                    product.getCategory().setCreatedDate(formatter.format(formatter.parse(product.getCategory().getCreatedDate())));
+                if (product.getCategory().getUpdatedDate() != null)
+                    product.getCategory().setUpdatedDate(formatter.format(formatter.parse(product.getCategory().getUpdatedDate())));
+            }
         }
         return products;
     }
@@ -449,8 +455,10 @@ public class RetailerStoreServiceImplV1 implements RetailerStoreService {
             throw new OKException("Products not found.");
         }
         for (Category category : categories) {
-            category.setCreatedDate(formatter.format(formatter.parse(category.getCreatedDate())));
-            category.setUpdatedDate(formatter.format(formatter.parse(category.getUpdatedDate())));
+            if (category.getCreatedDate() != null)
+                category.setCreatedDate(formatter.format(formatter.parse(category.getCreatedDate())));
+            if (category.getUpdatedDate() != null)
+                category.setUpdatedDate(formatter.format(formatter.parse(category.getUpdatedDate())));
         }
         return categories;
     }
@@ -468,13 +476,7 @@ public class RetailerStoreServiceImplV1 implements RetailerStoreService {
         if (products.isEmpty()) {
             throw new OKException("Product not Found. This category have no products.");
         }
-        for (Product product : products) {
-            product.setCreatedDate(formatter.format(formatter.parse(product.getCreatedDate())));
-            product.setUpdatedDate(formatter.format(formatter.parse(product.getUpdatedDate())));
-            product.getCategory().setCreatedDate(formatter.format(formatter.parse(product.getCategory().getCreatedDate())));
-            product.getCategory().setUpdatedDate(formatter.format(formatter.parse(product.getCategory().getUpdatedDate())));
-        }
-        return products;
+        return getProducts(products, formatter);
     }
 
     @Override

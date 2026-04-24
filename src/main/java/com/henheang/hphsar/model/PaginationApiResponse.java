@@ -15,5 +15,6 @@ public class PaginationApiResponse<T> {
     private String message;
     private T data;
     private Integer totalPage;
+    private Integer totalElements;
     private String date;
 }

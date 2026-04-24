@@ -15,21 +15,21 @@
             MyBatis uses this to know: "this XML belongs to AppUserRepository"
 
     Each SQL block has an id="..." that matches the method name in the Java interface:
-        Java method:  AppUser findDistributorUserByEmail(String email)
-        XML block:    <select id="findDistributorUserByEmail" ...>
+        Java method: AppUser findDistributorUserByEmail(String email)
+        XML block: <select id="findDistributorUserByEmail" ...>
 
     HOW PARAMETERS WORK:
     ══════════════════════
-    #{email}        → MyBatis replaces this with the actual value of the `email` parameter
-    #{user.email}   → When @Param("user") is used, access nested fields with dot notation
-    #{newPassword}  → When @Param("newPassword") is used on a method parameter
+    #{email} → MyBatis replaces this with the actual value of the `email` parameter
+    #{user.email} → When @Param("user") is used, access nested fields with dot notation
+    #{newPassword} → When @Param("newPassword") is used on a method parameter
 
     HOW RESULT MAPPING WORKS:
     ══════════════════════════
     Before: We used @Result(property="isVerified", column="is_verified") on every method
-    After:  We define ONE <resultMap> here and reuse it everywhere with resultMap="AppUserResultMap"
+    After: We define ONE <resultMap> here and reuse it everywhere with resultMap="AppUserResultMap"
 
-    column   = the actual column name in the database table
+    column = the actual column name in the database table
     property = the field name in the Java AppUser class
 -->
 
@@ -41,7 +41,7 @@
         Defines how database column names map to Java class field names.
         The database uses snake_case (is_verified) but Java uses camelCase (isVerified).
 
-        <id>     → maps the PRIMARY KEY column (special tag for performance optimization)
+        <id> → maps the PRIMARY KEY column (special tag for performance optimization)
         <result> → maps every other column
 
         This resultMap is written ONCE and reused by all SELECT queries below.
@@ -62,13 +62,13 @@
          ═══════════════════════════════════════════════════════════════════════
          <insert> tag is for INSERT SQL operations.
 
-         parameterType  → tells MyBatis the Java type of the input parameter
-         RETURNING *    → PostgreSQL feature: returns the inserted row as a result
+         parameterType → tells MyBatis the Java type of the input parameter
+         RETURNING * → PostgreSQL feature: returns the inserted row as a result
                           This is why we use resultMap here (we get back an AppUser)
 
-         #{user.roleId}  → accesses the roleId field of the AppUserRequest object
+         #{user.roleId} → accesses the roleId field of the AppUserRequest object
                            "user" comes from @Param("user") in the Java method
-         DEFAULT         → tells PostgreSQL to use the default value for that column
+         DEFAULT → tells PostgreSQL to use the default value for that column
                            (usually auto-increment id, timestamps, boolean defaults)
     -->
 
