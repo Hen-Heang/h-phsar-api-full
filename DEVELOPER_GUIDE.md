@@ -364,6 +364,59 @@ public interface OrderRepository {
 </mapper>
 ```
 
+### Dynamic SQL — sort + pagination (Korean enterprise pattern)
+
+For any list query that supports sorting, use `<sql>` fragments and `<choose>` instead of duplicating ASC/DESC methods.
+
+**Step 1 — Define reusable fragments** (once per mapper file, after resultMaps):
+
+```xml
+<sql id="selectOrderBase">
+    SELECT id, store_id AS storeId, retailer_account_id AS retailerId,
+           created_date AS date, status_id
+    FROM tb_order
+</sql>
+
+<sql id="orderByDate">
+    ORDER BY created_date
+    <choose>
+        <when test="sort != null and sort.equalsIgnoreCase('asc')">ASC</when>
+        <otherwise>DESC</otherwise>
+    </choose>
+</sql>
+
+<sql id="paginate">
+    LIMIT #{pageSize} OFFSET #{pageSize} * (#{pageNumber} - 1)
+</sql>
+```
+
+**Step 2 — Use `<include>` in queries:**
+
+```xml
+<select id="getOrders" resultMap="OrderResultMap">
+    <include refid="selectOrderBase"/>
+    WHERE store_id = #{storeId} AND status_id = 1
+    <include refid="orderByDate"/>
+    <include refid="paginate"/>
+</select>
+```
+
+**Step 3 — Single repository method with `sort` param:**
+
+```java
+List<Order> getOrders(String sort, Integer pageNumber, Integer pageSize, Integer storeId);
+```
+
+**Step 4 — Service just passes sort through — no if/else:**
+
+```java
+List<Order> orders = repository.getOrders(sort, pageNumber, pageSize, storeId);
+```
+
+> ❌ **Do not** create two methods `getOrdersASC` / `getOrdersDESC`. All existing mappers have been refactored to this pattern.
+
+---
+
 ### PostgreSQL-specific patterns used in this project
 
 ```xml
@@ -568,6 +621,8 @@ if (id > MAX_INT) { ... }
 - [ ] Business logic is inside Service, not Controller?
 - [ ] Using custom exception classes (not raw try-catch)?
 - [ ] If using `${variable}` in XML — is it validated with a whitelist in Service first?
+- [ ] List queries with sort use `<sql>` fragments + `<choose>` (not separate ASC/DESC methods)?
+- [ ] List controller endpoints use `okPage()` (not `ok()`) so frontend gets `totalElements` and `totalPages`?
 
 ---
 

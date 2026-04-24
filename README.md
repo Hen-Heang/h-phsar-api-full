@@ -76,17 +76,17 @@ http://localhost:8080/swagger-ui/index.html
 - **Distributor Order Controller** (/api/v1/distributor/orders/)
   http://localhost:8080/api/v1/distributor/orders
   - Get all order : get all orders listing
-  - Get pending order : get all orders that is pending
-  - Get preparing order : get all orders that is preparing
-  - Get dispatching order : get all orders that is dispatching
-  - Get confirming order : get all orders that is comfirming
-  - Get completed order : get all orders that has been completed
+  - Get pending order : get all orders that are pending
+  - Get preparing order : get all orders that are being prepared
+  - Get dispatching order : get all orders that are dispatched
+  - Get confirming order : get all orders in confirming state
+  - Get completed order : get all orders that have been completed
   - Get order detail : get detail of an order
-  - Get invoice : get invoice of the store. order need to be completed in other to get invoice
-  - Accept order : accept order that is still in pending. update to preparing
-  - Decline order : decline order that is in pending
-  - Update order to dispatching : update order status that is preparing to dispatching
-  - Update order to confirming : update order status that is dispatching to confirming. confirm order will wait for retailer to comfirm that they got the product/order
+  - Get invoice : get invoice of the store. order must be completed to generate invoice
+  - Accept order : accept a pending order — status moves to PROCESSING
+  - Decline order : decline a pending order — status moves to REJECTED
+  - Dispatch order : mark a PROCESSING order as dispatched — status moves to CONFIRMED
+  - Mark delivered : mark a CONFIRMED order as delivered — status auto-completes to COMPLETED (no retailer confirmation required)
 - **Distributor Homepage Controller** (/api/v1/distributor/order_activities/)
   http://localhost:8080/api/v1/distributor/order_activities
   - Get all order : get all orders listing
@@ -128,19 +128,18 @@ http://localhost:8080/swagger-ui/index.html
   - Create retailer profile : create a profile for retailer. if not created, can not use all feature
   - Get profile : Get profile details
   - Edit profile : Change or update profile
-- **Retailer Profile Controller** (/api/v1/retailer/orders/)
+- **Retailer Order Controller** (/api/v1/retailer/orders/)
   http://localhost:8080/api/v1/retailer/orders
   - Add to cart : add product to cart. can be one product or a list
-  - Update cart product : update product in the cart (qty)
+  - Update cart product : update product quantity in cart
   - Remove product : remove product from cart
-  - Confirm order : confirm cart as order
-  - Draft cart : save cart as draft for continuing later
+  - Confirm order : submit cart as a live order (status → PENDING)
+  - Draft cart : save cart as draft for later
   - Cancel order : delete cart and cancel order
-  - Confirm transaction : when product is delivered retailer have to confirm that they receive the product
   - Get cart details : get details of cart
-  - Get order details : get details of the order by id
-  - Get orders progress : get all orders and its progress
-  - Get invoice : get invoice details
+  - Get order details : get details of an order by id
+  - Get orders progress : get all active orders and their status
+  - Get invoice : get invoice for a completed order
 - **Retailer Report Controller** (/api/v1/retailer/reports/)
   http://localhost:8080/api/v1/retailer/report
   - Get report : get retailer report
@@ -170,6 +169,59 @@ Go to **DataGrip** and choose the connection then input the information as provi
 - This system have 2 roles which is distributor and retailer.
 - This system need real verifiable email address with OTP
 - Role of distributor is 1 while retailer is 2
+
+---
+
+## Order Flow
+
+```
+Retailer places order
+        │
+        ▼  status_id = 1
+    PENDING  ──── Distributor declines ──→  REJECTED (8)
+        │
+        │  Distributor accepts
+        ▼  status_id = 2
+   PROCESSING
+        │
+        │  Distributor dispatches
+        ▼  status_id = 3
+   CONFIRMED
+        │
+        │  Distributor marks delivered
+        ▼  status_id = 6
+   COMPLETED  ✅  (auto-complete — no retailer confirmation required)
+```
+
+**Status ID reference (tb_status)**
+
+| ID | Name | Who acts |
+|----|------|----------|
+| 1 | PENDING | Retailer just placed order |
+| 2 | PROCESSING | Distributor accepted |
+| 3 | CONFIRMED | Distributor dispatched |
+| 6 | COMPLETED | Distributor marked delivered — order done |
+| 8 | REJECTED | Distributor declined |
+| 9 | DRAFT | Retailer saved cart as draft |
+
+> Statuses 4 (SHIPPING), 5 (DELIVERED), 7 (CANCELLED) exist in the DB but are not used in the current flow.
+
+---
+
+## Notification System
+
+Notifications are sent automatically at each order status change:
+
+| Event | Recipient | Type ID |
+|-------|-----------|---------|
+| Order placed | Distributor | 3 — New Order |
+| Stock runs out after accept | Distributor | 2 — Out of Stock |
+| Order accepted | Retailer | 4 — Order Accepted |
+| Order declined | Retailer | 5 — Order Declined |
+| Order dispatched | Retailer | 7 — Order Dispatching |
+| Order completed | Retailer | 9 — Order Complete |
+
+Each notification stores `order_id` so the frontend can link directly to the order detail page (`/web/retailer/orders?orderId=X`).
 
 ---
 
