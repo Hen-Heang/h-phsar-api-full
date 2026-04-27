@@ -88,12 +88,12 @@ public class RetailerProfileServiceImp implements RetailerProfileService {
             throw new BadRequestException("Please input valid gender. Available gender are 'male', 'female', 'gay', 'lesbian', 'bisexual', 'pansexual', 'queer', or 'other'.");
         }
 
-        // prevent blank
-        if (retailerRequest.getFirstName().isEmpty() || retailerRequest.getFirstName().isBlank() ||
-                retailerRequest.getLastName().isEmpty() || retailerRequest.getLastName().isBlank() ||
-                retailerRequest.getGender().isEmpty() || retailerRequest.getGender().isBlank() ||
-                retailerRequest.getAddress().isEmpty() || retailerRequest.getAddress().isBlank() ||
-                retailerRequest.getProfileImage().isEmpty() || retailerRequest.getProfileImage().isBlank()
+        // prevent null or blank
+        if (retailerRequest.getFirstName() == null || retailerRequest.getFirstName().isBlank() ||
+                retailerRequest.getLastName() == null || retailerRequest.getLastName().isBlank() ||
+                retailerRequest.getGender() == null || retailerRequest.getGender().isBlank() ||
+                retailerRequest.getAddress() == null || retailerRequest.getAddress().isBlank() ||
+                retailerRequest.getProfileImage() == null || retailerRequest.getProfileImage().isBlank()
         ) {
             throw new BadRequestException("Opps, fields cannot be empty or blank!");
         }

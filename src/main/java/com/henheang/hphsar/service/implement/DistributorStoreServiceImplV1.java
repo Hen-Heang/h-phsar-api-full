@@ -92,7 +92,7 @@ public class DistributorStoreServiceImplV1 implements DistributorStoreService {
                 throw new InternalServerErrorException("Insert failed.");
             }
         } else {
-            throw new UnauthorizedException("User is not verified. Unable to create store. Please verify email/account.");
+            throw new ForbiddenException("User is not verified. Unable to create store. Please verify email/account.");
         }
         Store newStore = storeRepository.getUserStore(currentUserId);
         newStore.setCreatedDate(formatter.format(formatter.parse(store.getCreatedDate())));

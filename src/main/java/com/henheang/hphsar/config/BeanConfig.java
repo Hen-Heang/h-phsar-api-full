@@ -1,7 +1,10 @@
 package com.henheang.hphsar.config;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -25,5 +28,14 @@ public class BeanConfig {
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    // Allows sending a single string instead of an array for List<String> fields.
+    // e.g. "additionalPhone": "0123456789" works the same as ["0123456789"]
+    @Bean
+    @Primary
+    ObjectMapper objectMapper() {
+        return new ObjectMapper()
+                .enable(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY);
     }
 }

@@ -15,13 +15,16 @@ http://localhost:8080/swagger-ui/index.html
 
 1. Clone repo
     ```bash
-    git clone https://github.com/Hen-Heang/h-phsar-api.git
+    git clone https://github.com/Hen-Heang/h-phsar-api-full.git
     ```
 
 2. To run the code
    - Start the project Go to file > Open > Choose the folder of the cloned project
    - Run the project by clicking the start button
    - Open browser and type http://localhost:8080/swagger-ui/index.html
+
+3. Read the coding standards before adding features
+   - See [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) for patterns, conventions, and common mistakes
 
 > **H-Phsar** is a Cambodian B2B online marketplace (ផ្សារ) for business between Distributor and Retailer. Business owners can trade more efficiently with lower operational complexity.
 
@@ -380,6 +383,17 @@ PUT /authorization/forget?otp=1234&email=...&newPassword=...
 | `TrailingSlashNormalizationFilter` | Strip trailing slashes before auth checks (highest precedence) |
 | `SecurityConfig` | Route access rules by role |
 | `JwtAuthenticationEntryPoint` | Return 401 JSON when unauthenticated |
+
+---
+
+## Recent Bug Fixes
+
+| # | File | Issue | Fix |
+|---|------|-------|-----|
+| 1 | `RetailerReportMapper.xml` | `BindingException: Invalid bound statement` — mapper XML did not exist so all 16 retailer report queries failed at runtime | Created the complete XML mapper file with all SQL statements |
+| 2 | `BeanConfig.java` | `HttpMessageNotReadableException: Cannot construct instance of ArrayList from String value` — sending `additionalPhone` as a plain string instead of array caused a 400 parse error | Added `ObjectMapper` bean with `ACCEPT_SINGLE_VALUE_AS_ARRAY` — both `"phone"` and `["phone"]` now work |
+| 3 | `DistributorStoreServiceImplV1.java` | Creating a store with an unverified account returned HTTP 401, which caused the frontend to auto-logout the user | Changed `UnauthorizedException` → `ForbiddenException` so the response is HTTP 403 (no auto-logout) |
+| 4 | `RetailerProfileServiceImp.java` | `NullPointerException: Cannot invoke String.isEmpty() because getProfileImage() is null` — `.isEmpty()` was called directly on a nullable field | Replaced all `.isEmpty()` checks with `== null || .isBlank()` for all 5 validated fields |
 
 ---
 

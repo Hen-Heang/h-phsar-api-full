@@ -3,7 +3,6 @@ package com.henheang.hphsar.repository;
 import com.henheang.hphsar.model.retailer.report.CategoryNameAndTotalOfQty;
 import org.apache.ibatis.annotations.Mapper;
 
-import java.sql.Timestamp;
 import java.util.List;
 
 @Mapper
